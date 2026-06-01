@@ -16,6 +16,7 @@ add_library(InnerHeavenMenu SHARED
     src/features/misc.cpp
     src/features/lua_console.cpp
     src/features/game_lua.cpp
+    src/features/wavemode.cpp
 )
 
 target_include_directories(InnerHeavenMenu PRIVATE src)

@@ -4,6 +4,7 @@
 #include "../features/world.h"
 #include "../features/misc.h"
 #include "../features/lua_console.h"
+#include "../features/wavemode.h"
 
 // ── Enum name tables ───────────────────────────────────────────────────────
 
@@ -70,6 +71,9 @@ static const char* s_LogLevel[]      = { "ERROR", "WARN", "INFO", "DEBUG", "VERB
 static const char* s_AlertBGM[]      = { "DEFAULT", "CUSTOM1", "CUSTOM2", "SILENT" };
 static const char* s_StaffRank[]     = { "DEFAULT", "S++", "S+", "S", "A++", "A+", "A" };
 static const char* s_DDUniform[]     = { "STANDARD", "SNEAKING", "BATTLE", "PARASITE" };
+static const char* s_WaveArena[]     = { "AFGHAN_OUTPOST", "AFRICA_VILLAGE", "MOTHER_BASE_DECK",
+                                         "RUINS_COMPOUND", "AIRPORT_FACILITY", "CURRENT_LOCATION" };
+static const char* s_WaveDiff[]      = { "RECRUIT", "NORMAL", "HARD", "INSANE" };
 
 // ── Category builders ──────────────────────────────────────────────────────
 
@@ -932,6 +936,49 @@ static MenuNode BuildProgressionMenu(Config& c) {
     });
 }
 
+static MenuNode BuildWaveSurvivalMenu(Config& c) {
+    return MakeSub("Wave Survival", "Inner Heaven's stealth wave-survival gamemode - pick an arena and hold out", {
+        MakeSub("Start Mission", "Choose an arena and deploy (always replayable)", {
+            MakeCmd("Afghan Outpost",   "Sunny desert outpost - start a wave session here",
+                    []() { Config::Get().waveArena = 0; Features::WaveMode::Start(); }),
+            MakeCmd("Africa Village",   "Overcast African village - start a wave session here",
+                    []() { Config::Get().waveArena = 1; Features::WaveMode::Start(); }),
+            MakeCmd("Mother Base Deck", "Mother Base platform - start a wave session here",
+                    []() { Config::Get().waveArena = 2; Features::WaveMode::Start(); }),
+            MakeCmd("Ruins Compound",   "Foggy ruins - start a wave session here",
+                    []() { Config::Get().waveArena = 3; Features::WaveMode::Start(); }),
+            MakeCmd("Airport Facility", "Rainy airfield - start a wave session here",
+                    []() { Config::Get().waveArena = 4; Features::WaveMode::Start(); }),
+            MakeCmd("Current Location", "Build the arena right where you are standing",
+                    []() { Config::Get().waveArena = 5; Features::WaveMode::Start(); }),
+        }),
+        MakeCmd("Stop Mission",     "End the active wave session and clear all spawned enemies",
+                Features::WaveMode::Stop),
+        MakeSep(),
+        MakeSub("Rules", "Tune wave counts, difficulty, and pacing", {
+            MakeInt ("waveStartEnemies",   "Enemies in the first wave",                                  &c.waveStartEnemies, 1, 24, 1),
+            MakeInt ("waveEnemyIncrement", "Extra enemies added each subsequent wave",                   &c.waveEnemyIncrement, 0, 12, 1),
+            MakeInt ("waveMaxEnemies",     "Hard cap on simultaneous enemies per wave",                  &c.waveMaxEnemies, 4, 48, 2),
+            MakeInt ("waveMaxWaves",       "Waves needed to win (0 = endless survival)",                 &c.waveMaxWaves, 0, 50, 1),
+            MakeEnum("waveDifficulty",     "Enemy difficulty preset (scales health & accuracy)",         &c.waveDifficulty, s_WaveDiff, 4),
+            MakeInt ("waveSpawnRadius",    "Radius of the spawn ring around you (metres)",               &c.waveSpawnRadius, 15, 120, 5, "m"),
+            MakeInt ("waveReinforceDelay", "Pause between clearing a wave and the next (seconds)",       &c.waveReinforceDelay, 0, 20, 1, "s"),
+        }),
+        MakeSep(),
+        MakeSub("Balancing", "Stealth-focused balancing options", {
+            MakeToggle("waveNeutralUntilSpotted", "New waves spawn passive and only turn hostile once you're spotted", &c.waveNeutralUntilSpotted),
+            MakeToggle("waveAutoStealthBonus",    "Award a ghost bonus for clearing a wave undetected",  &c.waveAutoStealthBonus),
+            MakeToggle("waveLethalPenalty",       "Reduce score for waves where you were detected",      &c.waveLethalPenalty),
+        }),
+        MakeSep(),
+        MakeSub("Display", "Gamemode HUD and presentation", {
+            MakeToggle("waveShowHud",      "Show the top-left enemy counter and status HUD",             &c.waveShowHud),
+            MakeToggle("waveForceWeather", "Apply each arena's themed weather when starting",            &c.waveForceWeather),
+            MakeEnum  ("waveArena",        "Currently selected arena theme",                             &c.waveArena, s_WaveArena, 6),
+        }),
+    });
+}
+
 static MenuNode BuildVisualsMenu(Config& c) {
     return MakeSub("Visuals", "ESP overlays, night vision, crosshair, thermal, and rendering", {
         MakeSub("ESP", "Extra-sensory perception overlays for enemy tracking", {
@@ -1143,6 +1190,7 @@ MenuNode BuildMenuTree() {
         BuildSoundMenu(c),
         BuildProgressionMenu(c),
         MakeSep(),
+        BuildWaveSurvivalMenu(c),
         BuildVisualsMenu(c),
         BuildPresetsMenu(c),
         BuildMiscMenu(c),

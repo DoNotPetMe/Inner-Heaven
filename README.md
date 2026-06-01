@@ -160,6 +160,21 @@ The menu shows a breadcrumb path at the top, a scrollable item list, navigation 
 - **Team Levels**: Combat, R&D, Support, Intel, Medical, Base Dev, Security (0-99)
 - **Max Out**: Max platforms, max teams, force recruit rank (S++ through A)
 
+### Wave Survival — Custom Gamemode (Inner Heaven Exclusive)
+A self-contained stealth wave-survival mode inspired by *Splinter Cell: Blacklist*'s wave maps. Picked from the **Wave Survival** menu, every arena is always replayable.
+
+- **Start Mission**: 6 selectable arenas (Afghan Outpost, Africa Village, Mother Base Deck, Ruins Compound, Airport Facility, Current Location). Each builds the arena around your current position.
+- **Enemy counter HUD** (top-left): live count of remaining hostiles, current wave number, stealth/detected status, and running score.
+- **Wave loop**: thin out the enemies (stealthily or loud) — when the counter hits **zero**, a larger reinforcement wave spawns in. Survive the configured number of waves (or go endless).
+- **Neutral until spotted**: reinforcements spawn **passive** and only turn hostile the moment you're actually detected — so each wave can be opened with a clean stealth approach before it escalates, keeping the difficulty curve fair.
+- **Rules**: starting enemy count, per-wave increment, max simultaneous enemies, total waves (0 = endless), difficulty preset (Recruit/Normal/Hard/Insane), spawn-ring radius, reinforcement delay.
+- **Balancing**: ghost bonus for clearing a wave undetected, optional score penalty for going loud.
+- **Scoring**: per-wave bonus scaled by wave number and difficulty, with a stealth multiplier.
+
+The enemy counter is driven by **real game state** — it reuses the live entity-list reader (the same one ESP uses) to count living enemies inside the arena, so the count reflects actual takedowns rather than a script's bookkeeping. The two game-specific touch points — spawning soldiers and reading the "player detected" flag — are delegated to an injected Lua helper (`IHWave.*`), guarded with `pcall`, so they're a single tuning seam per game build.
+
+> **Note on the side-ops menu:** the gamemode is launched from Inner Heaven's own **Wave Survival** menu, which acts as the always-replayable mission select. Wiring these into the in-game iDroid *Side Ops* list (so they appear alongside base-game side jobs) requires hooking Fox Engine's quest registration and is scaffolded as the next integration step — the gamemode logic itself is complete and runs today from the mod menu.
+
 ### Visuals (Inner Heaven Exclusive)
 - **ESP > Display**: Bounding boxes, distance, health bars, names, skeleton, weapons, alert state
 - **ESP > Range & Lines**: Max range (10-2000m), snap lines with origin selection

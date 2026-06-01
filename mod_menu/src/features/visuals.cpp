@@ -114,4 +114,37 @@ void RenderOverlay() {
     } __except(1) {}
 }
 
+int CountEnemiesInRadius(float cx, float cy, float cz, float radius) {
+    if (!s_EntityListAddr) return -1;
+
+    int found = 0;
+    float r2 = radius * radius;
+
+    __try {
+        uintptr_t lb = Memory::Read<uintptr_t>(s_EntityListAddr);
+        if (!lb) return -1;
+        int cnt = Memory::Read<int>(lb + 0x10);
+        if (cnt < 0 || cnt > 1024) return -1;
+        uintptr_t arr = Memory::Read<uintptr_t>(lb + 0x18);
+        if (!arr) return -1;
+
+        for (int i = 0; i < cnt; ++i) {
+            uintptr_t ent = Memory::Read<uintptr_t>(arr + i * 8);
+            if (!ent) continue;
+
+            float hp = Memory::Read<float>(ent + 0x1B8);
+            if (hp <= 5.0f) continue; // dead or downed-to-zero — not an active threat
+
+            float ex = Memory::Read<float>(ent + 0x80);
+            float ey = Memory::Read<float>(ent + 0x84);
+            float ez = Memory::Read<float>(ent + 0x88);
+            float dx = ex - cx, dy = ey - cy, dz = ez - cz;
+            if (dx*dx + dy*dy + dz*dz <= r2)
+                ++found;
+        }
+    } __except(1) { return -1; }
+
+    return found;
+}
+
 } // namespace Features::Visuals

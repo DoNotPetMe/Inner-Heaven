@@ -520,6 +520,23 @@ struct Config {
     // ── Quick Presets ──────────────────────────────────────────────────
     // (no persistent state - these are commands that set multiple values)
 
+    // ── Wave Survival (Inner Heaven Gamemode) ──────────────────────────
+    int  waveArena          = 0;     // 0=AFGHAN_OUTPOST..5=CURRENT_LOCATION (theme)
+    int  waveStartEnemies   = 6;     // enemies in wave 1
+    int  waveEnemyIncrement = 3;     // additional enemies each subsequent wave
+    int  waveMaxEnemies     = 24;    // hard cap on simultaneous enemies
+    int  waveMaxWaves       = 10;    // 0 = endless
+    int  waveDifficulty     = 1;     // 0=RECRUIT,1=NORMAL,2=HARD,3=INSANE
+    int  waveSpawnRadius    = 45;    // metres - ring the enemies spawn on
+    int  waveReinforceDelay = 5;     // seconds between a wave clearing and the next
+    bool waveNeutralUntilSpotted = true; // Blacklist-style: spawns are passive until detected
+    bool waveAutoStealthBonus = true;    // award bonus score for clearing a wave undetected
+    bool waveLethalPenalty  = false;     // lethal takedowns reduce score (encourage non-lethal)
+    bool waveShowHud        = true;      // draw the top-left enemy counter / status HUD
+    bool waveForceWeather   = false;     // apply the arena's themed weather on start
+    bool waveModeActive     = false;     // runtime: a session is currently running
+    bool waveModeActiveFailed = false;   // runtime: last Start() couldn't anchor an arena
+
     // ── Debug ──────────────────────────────────────────────────────────
     bool debugMode          = false;
     bool debugMessages      = false;

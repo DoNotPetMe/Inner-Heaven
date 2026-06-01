@@ -3,6 +3,7 @@
 #include "../memory/memory.h"
 #include "../memory/pattern.h"
 #include <cstdio>
+#include <cstdlib>
 
 namespace Features::GameLua {
 
@@ -10,10 +11,12 @@ struct lua_State;
 using lua_pcall_t       = int(__fastcall*)(lua_State* L, int nargs, int nresults, int errfunc);
 using luaL_loadstring_t = int(__fastcall*)(lua_State* L, const char* s);
 using lua_settop_t      = void(__fastcall*)(lua_State* L, int idx);
+using lua_tolstring_t   = const char*(__fastcall*)(lua_State* L, int idx, size_t* len);
 
 static lua_pcall_t       s_pcall      = nullptr;
 static luaL_loadstring_t s_loadstring = nullptr;
 static lua_settop_t      s_settop     = nullptr;
+static lua_tolstring_t   s_tolstring  = nullptr;
 static lua_State*        s_L          = nullptr;
 
 void Init() {
@@ -29,6 +32,9 @@ void Init() {
     uintptr_t settopScan = Pattern::Scan("85 D2 78 ?? 48 8B 41 ?? 48 8D 04 D0", base, size);
     if (settopScan) s_settop = reinterpret_cast<lua_settop_t>(settopScan);
 
+    uintptr_t tolstrScan = Pattern::Scan("53 48 83 EC 20 89 D3 48 89 CF E8 ?? ?? ?? ?? 83 78 ?? 04", base, size);
+    if (tolstrScan) s_tolstring = reinterpret_cast<lua_tolstring_t>(tolstrScan);
+
     uintptr_t stateScan = Pattern::Scan(
         "48 8B 0D ?? ?? ?? ?? 48 85 C9 74 ?? E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? BA 01",
         base, size);
@@ -37,6 +43,10 @@ void Init() {
         uintptr_t ptr = stateScan + 7 + off;
         s_L = Memory::Read<lua_State*>(ptr);
     }
+}
+
+bool IsReady() {
+    return s_L && s_pcall && s_loadstring;
 }
 
 void RunCode(const char* luaCode) {
@@ -50,6 +60,27 @@ void RunCode(const char* luaCode) {
         if (s_settop) s_settop(s_L, 0);
         return;
     }
+}
+
+int RunCodeInt(const char* luaCode, int fallback) {
+    if (!s_L || !s_pcall || !s_loadstring) return fallback;
+
+    if (s_loadstring(s_L, luaCode) != 0) {
+        if (s_settop) s_settop(s_L, 0);
+        return fallback;
+    }
+    if (s_pcall(s_L, 0, 1, 0) != 0) {
+        if (s_settop) s_settop(s_L, 0);
+        return fallback;
+    }
+
+    int result = fallback;
+    if (s_tolstring) {
+        const char* s = s_tolstring(s_L, -1, nullptr);
+        if (s) result = atoi(s);
+    }
+    if (s_settop) s_settop(s_L, 0);
+    return result;
 }
 
 static void RunIfChanged(int& prev, int current, const char* fmt) {

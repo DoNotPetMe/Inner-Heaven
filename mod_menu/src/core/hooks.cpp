@@ -9,6 +9,7 @@
 #include "../features/misc.h"
 #include "../features/lua_console.h"
 #include "../features/game_lua.h"
+#include "../features/wavemode.h"
 #include <MinHook.h>
 
 namespace Hooks {
@@ -97,6 +98,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         Features::Misc::Init();
         Features::LuaConsole::Init();
         Features::GameLua::Init();
+        Features::WaveMode::Init();
 
         Menu::Init();
 
@@ -111,6 +113,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     Features::World::Tick();
     Features::Misc::Tick();
     Features::GameLua::Tick();
+    Features::WaveMode::Tick();
 
     // Render
     Renderer::BeginFrame();
@@ -119,6 +122,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         Menu::Render();
 
     Features::Visuals::RenderOverlay();
+    Features::WaveMode::RenderHud();
 
     Renderer::EndFrame();
 
