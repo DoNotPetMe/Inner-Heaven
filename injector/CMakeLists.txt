@@ -5,4 +5,3 @@ add_executable(InnerHeavenInjector
 )
 
 target_include_directories(InnerHeavenInjector PRIVATE src)
-target_compile_definitions(InnerHeavenInjector PRIVATE UNICODE _UNICODE)

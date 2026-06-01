@@ -7,10 +7,10 @@ std::optional<ProcessInfo> FindProcessByName(const std::string& processName) {
     if (snapshot == INVALID_HANDLE_VALUE)
         return std::nullopt;
 
-    PROCESSENTRY32A entry{};
+    PROCESSENTRY32 entry{};
     entry.dwSize = sizeof(entry);
 
-    if (!Process32FirstA(snapshot, &entry)) {
+    if (!Process32First(snapshot, &entry)) {
         CloseHandle(snapshot);
         return std::nullopt;
     }
@@ -26,7 +26,7 @@ std::optional<ProcessInfo> FindProcessByName(const std::string& processName) {
             CloseHandle(snapshot);
             return ProcessInfo{ entry.th32ProcessID, std::string(entry.szExeFile) };
         }
-    } while (Process32NextA(snapshot, &entry));
+    } while (Process32Next(snapshot, &entry));
 
     CloseHandle(snapshot);
     return std::nullopt;
