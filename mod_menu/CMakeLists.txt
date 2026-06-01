@@ -17,6 +17,7 @@ add_library(InnerHeavenMenu SHARED
     src/features/world.cpp
     src/features/visuals.cpp
     src/features/misc.cpp
+    src/features/lua_console.cpp
 )
 
 target_include_directories(InnerHeavenMenu PRIVATE src)

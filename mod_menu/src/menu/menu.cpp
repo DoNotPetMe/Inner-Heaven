@@ -4,6 +4,7 @@
 #include "tabs/tab_world.h"
 #include "tabs/tab_visuals.h"
 #include "tabs/tab_misc.h"
+#include "../features/lua_console.h"
 #include <imgui.h>
 
 namespace Menu {
@@ -34,6 +35,7 @@ void Render() {
         Tabs::World::Render();
         Tabs::Visuals::Render();
         Tabs::Misc::Render();
+        Features::LuaConsole::RenderTab();
         ImGui::EndTabBar();
     }
 

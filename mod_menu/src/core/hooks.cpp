@@ -7,6 +7,7 @@
 #include "../features/world.h"
 #include "../features/visuals.h"
 #include "../features/misc.h"
+#include "../features/lua_console.h"
 #include <MinHook.h>
 
 namespace Hooks {
@@ -97,6 +98,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         Features::World::Init();
         Features::Visuals::Init();
         Features::Misc::Init();
+        Features::LuaConsole::Init();
 
         pDevice->Release();
         pContext->Release();

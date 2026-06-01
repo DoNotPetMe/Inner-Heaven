@@ -45,6 +45,13 @@ A singleplayer mod menu and DLL injector for **Metal Gear Solid V: The Phantom P
 - Rapid Fire — remove fire rate limiter
 - No Fall Damage — survive any drop
 
+### Lua Console
+- **Built-in Fox Engine Lua 5.1 console** — execute any game Lua command live
+- Command history with Up/Down arrow navigation
+- Syntax error and runtime error reporting
+- Quick-execute buttons: Max HP, Reflex ON, Supply Drop, Clear Weather
+- Run any `TppMission`, `Player`, `TppWeather`, `GkEventTimerManager` call directly
+
 ## Controls
 
 | Key | Action |
@@ -84,7 +91,8 @@ Output:
 - **Injection method**: `CreateRemoteThread` + `LoadLibraryA` — straightforward and reliable since MGSV has no anti-cheat in singleplayer.
 - **Rendering hook**: DirectX 11 `IDXGISwapChain::Present` hook via MinHook trampolines.
 - **Overlay**: Dear ImGui with a custom MGS-inspired dark military green theme.
-- **Memory manipulation**: AOB (Array of Bytes) pattern scanning for version-independent address resolution. Byte patching for toggleable features, per-frame value writes for continuous effects.
+- **Memory manipulation**: AOB (Array of Bytes) pattern scanning for version-independent address resolution. Byte patching for toggleable features, per-frame value writes for continuous effects. Health and ammo patterns verified against community Cheat Engine tables.
+- **Lua bridge**: Captures the game's embedded Lua 5.1 state at runtime via AOB patterns from IHHook, then exposes the full Fox Engine Lua API through an in-menu console.
 
 ## Dependencies
 
