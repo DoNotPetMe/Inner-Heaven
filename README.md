@@ -18,88 +18,178 @@ Inner Heaven uses a **hierarchical list-based menu** modeled after Infinite Heav
 
 The menu shows a breadcrumb path at the top, a scrollable item list, navigation hints, and context-sensitive help text at the bottom.
 
-## Feature Categories (~160+ settings)
+## Feature Categories (~380+ settings)
 
 ### Player
-- **Combat**: God Mode, Infinite Ammo, No Reload, Infinite Suppressors, No Recoil, One Hit Kill, Infinite Reflex, Rapid Fire
-- **Movement**: Super Speed (configurable multiplier), No Fall Damage, Custom Player Scale
-- **Stealth**: Stealth Mode (frozen detection)
-- **Stats**: Player Health Scale (0-650%), Hero/Demon point controls
+- **Combat > Weapon Cheats**: God Mode, Infinite Ammo, No Reload, Infinite Suppressors, Infinite Mags, Infinite Throwables, Infinite Battery
+- **Combat > Accuracy & Recoil**: No Recoil, No Weapon Sway, Perfect Accuracy, No Bullet Drop
+- **Combat > Damage & Effects**: One Hit Kill, Damage Multiplier, Explosive Bullets, Penetrating Shots, Silent Weapons
+- **Combat**: Rapid Fire, Infinite Reflex, Reflex Duration
+- **Movement**: Super Speed (configurable multiplier), No Fall Damage, Sprint/Crawl/Dive/Swim speed tuning
+- **Movement > Physics**: Gravity Scale, Custom Player Scale
+- **Stealth**: Stealth Mode (frozen detection), Noise Scale
+- **Stats & Health**: Player Health Scale (0-650%), Stamina Scale, Unlimited Stamina, No Breath Limit, Grip Strength
+- **Hero & Demon**: Don't Subtract Hero, Don't Add Ogre, Hero Subtracts Ogre
 
 ### Appearance
-- Player Type selection (Snake, DD Male/Female, Avatar, Liquid, Ocelot, Quiet)
-- 17 suit/outfit types (Sneaking Suit, Battle Dress, Parasite Suit, MGS1, Raiden, Ninja, Tuxedo, etc.)
-- Camo pattern index, headgear, bionic arm type
+- **Character Model**: Player Type selection (Snake, DD Male/Female, Avatar, Liquid, Ocelot, Quiet), Avatar Gender
+- **Outfit & Suit**: 17 suit/outfit types, DD Male/Female uniform variants
+- **Camo & Paint**: Camo pattern index (0-120), Face Paint selection
+- **Head & Face**: Headgear, FOVA Face/Body/Hair variation, Horn visibility, Shrapnel type
+- **Prosthetic Arm**: 8 bionic arm types, 4 color variants
+- **Accessories**: Scarf (6 variants), Accessory (10 types), Cigar, Blood Stains
 
 ### Camera
-- Free Camera with WASD+Space/Ctrl movement and adjustable speed
-- FOV override per mode (Normal, Aiming, Hiding, CQC)
-- Focal length, aperture, and focus distance controls
+- **Free Camera**: WASD+Space/Ctrl movement, adjustable speed, First Person mode
+- **FOV Override**: Global FOV + per-mode (Normal, Aiming, Hiding, CQC)
+- **Lens & Focus**: Focal length, aperture, focus distance
+- **Position Offsets**: Shoulder X/Y, camera distance, height, tilt/dutch angle
+- **Zoom & Scope**: Scope and binocular zoom multipliers
+- **Effects**: Camera shake intensity, auto-center disable, letterbox bars
+- **Photo Mode**: Freeze frame, 6 color filters, adjustable filter strength
 
 ### Resources
-- GMP, Heroism, Demon Points — set, lock, or use presets (5M GMP, 1M Heroism, Zero Demon)
-- Max All Plants / Materials
-- Resource collection scale per type (Material, Plant, Diamond, Container: 10-1000%)
+- **GMP**: Set, lock, presets (5M, 50M)
+- **Heroism**: Set, lock, preset (1M)
+- **Demon Points**: Set, lock, zero preset
+- **Resource Scale**: 8 resource type multipliers (Material, Plant, Diamond, Container, Fuel, Bio, Metal, Minor)
+- **Staff & Development**: MB Coin multiplier, recruit level, auto-dismiss, processing speed, instant base dev
+- Max All Plants / Materials commands
 
 ### World
-- **Time Scale**: Slow motion, clock speed (1-10000x), speed camera controls
+- **Time Scale**: Slow motion, clock speed (1-10000x), speed camera (world/player scale, continue time)
 - **Time of Day**: Override with slider + Dawn/Noon/Dusk/Midnight presets
-- **Weather**: Force Sunny/Cloudy/Rainy/Sandstorm/Foggy/Pouring, fog density & type
-- No Enemy AI, Infinite Fulton, Teleport to Waypoint
+- **Weather**: Force 7 weather types, fog density & type, dust density, rain wetness
+- **Lighting**: Ambient light, sun intensity, shadow intensity, color temperature, skybox rotation
+- **Wind**: Speed (0-30 m/s) and direction (0-360°)
+- **Environment**: No Enemy/Animal AI, Infinite Fulton, disable hazards (mines, traps, cameras, decoys, radio), water level, destruction level
+- Teleport to Waypoint
 
 ### Enemy
-- **Soldier Params**: Health/Sight/Night Sight/Hearing scale (0-400%), Item Drop Chance
-- **Phases**: Force alert phase (Sneak/Caution/Evasion/Alert), Keep Phase lock
+- **Soldier Params > Detection**: Sight/Night Sight/Hearing scale, CP communication range
+- **Soldier Params > Combat**: Health, Accuracy, Reaction, Aggression, Speed scale
+- **Soldier Params > Status Effects**: Stun/Sleep/Holdup duration scale
+- **Behavior**: Disable radio calls, body search, investigation, alert propagation, force interrogation, comms jamming
+- **Phases**: Force alert phase (5 types), Keep Phase lock
 - **Reinforcements**: Force super reinforce, heli reinforce, count/level ranges
-- **Custom Prep**: Per-equipment prevalence (Sniper, Missile, MG, Shotgun, SMG, Armor, Shield, Helmet, NVG, Gas Mask, Decoy, Mine, Camera)
-- Revenge mode, Wild Card soldiers, LRRP foot patrols
+- **Custom Prep > Weapons**: 6 weapon types prevalence
+- **Custom Prep > Armor**: 5 defensive gear types
+- **Custom Prep > Equipment**: 5 utility types (decoy, mine, camera, flashlight, radio)
+- **Custom Prep > Explosives**: 4 explosive types (grenade, smoke, stun, C4)
+- **Custom Prep > Quality**: Weapon and armor development levels
+- **Appearance**: Soldier face/body variation, custom soldier type
+- **Vehicle Patrols**: Count and type (Truck/APC/Tank/Random)
+- **Special Forces**: Wild Card, LRRP, force snipers, force heavy armor
+- Revenge mode (4 modes)
+
+### Skulls / Parasite
+- **Spawning**: Enable/disable, free roam spawns, type (Mist/Camo/Armor/Metallic), count (1-12), respawn timer
+- **Stats**: Health/Speed/Damage/Aggression scale
+- **Behavior**: Teleport, disappear, force phase (Melee/Ranged/Snipe), armor break
+- Parasite mist density
 
 ### Mission
-- Skip preparation, Start on Foot, Subsistence mode
-- Gameplay restrictions: Game Over on Discovery, Disable Game Over/Retry/Out of Bounds
-- HUD: Disable head/world/X-ray markers
-- Support menu controls: Disable support/buddy/attack/fulton menus
+- **Preparation**: Skip prep, Start on Foot, Force Night/Day
+- **Restrictions > Core Rules**: Game Over on Discovery, Disable Game Over/Retry/Out of Bounds, No Checkpoints
+- **Restrictions > Loadout**: Subsistence, Clear Items, Disable Heli Attack, Hand Ability/Item level
+- **Restrictions > Difficulty Mods**: No Reflex/Marking/Supply Drop/Buddy Support/Air Strikes/Spotter/Indicators/SloMo
+- **Restrictions > Timed Mission**: Enable time limit, configurable minutes
+- **HUD & Markers**: Disable head/world/X-ray markers
+- **Support Menus**: Disable support/buddy/attack/fulton menus
+- **Score & Ranking**: Score multiplier, mission rank override (S through E)
 
 ### Helicopter
-- Invincible Heli, Search Light override, Disable Pull Out
-- LZ Wait Height, Door Open Time, Disable Landing Zones
+- **Defense**: Invincible, Disable Pull Out, Stealth, Auto-Evade, Armor scale
+- **Landing & Approach**: Search Light, LZ Wait Height, Door Open Time, Disable LZs, Approach Angle
+- **Armament**: Weapon selection (Minigun/Rocket/Gatling/None), Speed scale
+- **Customization**: Color/skin (12 variants), custom music, radio station
 
 ### Buddy
-- Quiet weapon selection (6 variants with suppressed options)
-- D-Dog equipment (Naked, Sneaking Stun/Knife, Battle Dress, Fulton)
-- D-Horse and D-Walker loadout selection
+- **Quiet**: 6 weapon variants, behavior mode (Scout/Attack/Cover), bond level, humming, radio (32 tracks), invisibility
+- **D-Dog**: 5 equipment loadouts, behavior (Guard/Scout/Attack), bond level, barking, auto-mark, tricks (Shake/Roll/Sit/All)
+- **D-Horse**: 4 equipment variants, behavior (Follow/Stay/Wander), bond level, defecation, speed scale
+- **D-Walker**: 5 weapon loadouts, behavior (Follow/Patrol/Guard), ammo count, auto-attack, invisibility
 
 ### Mother Base
-- **Characters**: Toggle Ocelot, Puppy, Code Talker, Birds, Buddies
-- **Soldiers**: Equip range, additional spawns, prioritize female, lethal actions, morale
+- **Characters**: Toggle Ocelot, Puppy, Code Talker, Birds, Buddies, Animals (5 species)
+- **Soldiers**: Equip range, additional spawns, prioritize female, lethal actions, morale, NPC route mode
 - **Patrols**: Support/Attack heli count, Walker Gears
 - **Assets**: Posters, collection repop, unlock goal doors
+- **Ocean**: Wave height/speed, RGB color, foam, transparency, reflection
+- **Security**: Security level (5 tiers), alarms, UAV drones
+- **Facilities**: Lighting mode, shower timer, platform selection
 
 ### Fulton
-- Auto-fulton mode, recover critical, fulton/wormhole level
-- Variation range, dying/sleep penalties
+- **Mode**: Auto-fulton, recover critical, disable fulton, silent fulton
+- **Level & Quality**: Fulton/wormhole level, success rate override
+- **Targets**: Fulton everything, vehicles, containers, gun emplacements
+- **Penalties & Variation**: Variation range, dying/sleep penalties, extraction speed
 
 ### Side Ops
-- Force quest number, selection mode, repop mode
-- Enable quests during story missions, shooting practice retry
+- **Selection**: Force quest number, selection mode, repop mode, max active quests
+- **Rules**: Enable during missions, retry, enemy scaling/level
+- **Time Limits**: Optional time limits with configurable duration
 
 ### Cutscenes
-- Use selected soldier in all cutscenes
-- Force action during demos, weather/time overrides
+- **Character**: Use selected soldier in cutscenes
+- **Playback**: Allow action, skip all, playback speed (0.1-4x), free camera
+- **Overrides**: Weather and time of day during cutscenes
+- **Display**: Hide HUD, subtitle mode, letterbox bars
 
 ### Events
-- Free roam events: HUNTED, CRASHLAND, LOST COMS (0-100% chance each)
-- MB War Games with 8 faction profiles
+- **Free Roam Events**: HUNTED, CRASHLAND, LOST COMS, AMBUSH, SANDSTORM, BLACKOUT, INVASION, SUPPLY LOSS (0-100% chance each)
+- **Skull Encounters**: Random Skull unit spawns in free roam with configurable chance
+- **MB War Games**: 8 faction profiles
+- **Wildlife**: Animal encounter rate, meteor showers, custom event frequency
+
+### Vehicle (Inner Heaven Exclusive)
+- **Durability**: God mode, no damage, health scale, auto-repair
+- **Performance**: Speed multiplier, handling preset (Arcade/Realistic/Drift), nitro boost
+- **Weapons**: Infinite vehicle ammo
+- **Spawning**: Spawn vehicle by type (Truck/Jeep/APC/Tank/Walker), color selection
+- **Misc**: Invisibility, horn, radio station
+
+### Sound / Music (Inner Heaven Exclusive)
+- **Volume**: Per-channel volume (BGM, SFX, Voice, Ambient, Radio)
+- **Mute**: Quick mute toggles per channel
+- **Cassette Player**: Track selection (60 tracks), loop, autoplay
+- **Combat Audio**: Alert BGM override, disable alert/reflex sounds, heli music override
+
+### Progression (Inner Heaven Exclusive)
+- **Unlock All**: Weapons, Items, Outfits, Buddy Gear, Blueprints, Tapes, Missions, Side Ops
+- **Team Levels**: Combat, R&D, Support, Intel, Medical, Base Dev, Security (0-99)
+- **Max Out**: Max platforms, max teams, force recruit rank (S++ through A)
 
 ### Visuals (Inner Heaven Exclusive)
-- **ESP**: Bounding boxes, distance, health bars for enemies
-- **Night Vision**: Brightness amplification with adjustable intensity
-- **Crosshair**: Tactical overlay with gap design, adjustable size
+- **ESP > Display**: Bounding boxes, distance, health bars, names, skeleton, weapons, alert state
+- **ESP > Range & Lines**: Max range (10-2000m), snap lines with origin selection
+- **ESP > Colors**: Per-channel RGB for enemies and allies
+- **ESP > Extra Targets**: Vehicles, items, objectives
+- **Night Vision**: Brightness amplification, 4 color modes (Green/White/Amber/Blue), contrast, film grain
+- **Thermal Vision**: Heat imaging, 4 palettes (Ironbow/Rainbow/White Hot/Black Hot)
+- **Crosshair**: 5 styles (Cross/Dot/Circle/T-Shape/Chevron), size/gap/thickness/opacity, dynamic expansion, RGB color
+- Color grading filter (6 presets)
+
+### Quick Presets (Inner Heaven Exclusive)
+- **Stealth Preset**: Silent assassin configuration
+- **Rambo Preset**: Full combat god mode
+- **Hardcore Preset**: Maximum difficulty challenge
+- **Exploration Preset**: Free roam with no enemies
+- **Photo Preset**: Photography mode setup
+- **Max Resources**: Instant max GMP/Heroism/zero Demon
+- **Reset All**: Return all settings to default
 
 ### Misc
-- Save/Load Position
+- **Position Slots**: Save/Load up to 3 world positions
 - Lua Console (open from menu)
-- Show Help toggle, Debug controls
+- Show Help toggle
+
+### Debug
+- **Logging**: Debug mode, messages, button printing, file logging, 5 verbosity levels
+- **Display**: Position, FPS counter, frame time
+- **Rendering**: Wireframe, collision, nav mesh, patrol routes, CP zone boundaries
+- **Startup**: Skip logos, start offline
+- Memory dump
 
 ### Lua Console (Inner Heaven Exclusive)
 - **Live Fox Engine Lua 5.1 console** — execute any game command interactively

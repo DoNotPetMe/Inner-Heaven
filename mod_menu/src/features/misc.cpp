@@ -60,4 +60,12 @@ void Tick() {
     }
 }
 
+float* GetPlayerPosPtr() {
+    return s_PlayerPosAddr ? reinterpret_cast<float*>(s_PlayerPosAddr) : nullptr;
+}
+
+PosRef GetPlayerPos() {
+    return { GetPlayerPosPtr() };
+}
+
 } // namespace Features::Misc
