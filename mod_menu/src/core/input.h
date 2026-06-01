@@ -31,5 +31,7 @@ void PollGamepad();
 bool IsGamepadConnected();
 bool GamepadPressed(int button);
 bool GamepadRepeat(int button);
+bool GamepadDown(int button);
+void GetRightStick(float& outX, float& outY);
 
 } // namespace Input

@@ -314,6 +314,17 @@ struct Config {
     int  dwalkerAmmo        = 100;   // 0=INFINITE,1-999
     bool dwalkerInvisible   = false;
 
+    // ── Buddy: Multi-Buddy & Command Wheel ─────────────────────────────
+    bool multiBuddies       = false; // allow several buddies active at once
+    bool buddyDDogActive    = true;  // which buddies the multi-buddy/wheel manages
+    bool buddyQuietActive   = true;
+    bool buddyDHorseActive  = true;
+    bool buddyDWalkerActive = false;
+    bool buddyWheel         = true;  // enable the radial command-wheel overlay
+    bool buddyWheelGamepad  = true;  // open the wheel by holding Y on a controller
+    bool buddyWheelKeyboard = true;  // open the wheel by holding X on the keyboard
+    float buddyWheelScale   = 1.0f;  // wheel size multiplier
+
     // ── Mother Base ────────────────────────────────────────────────────
     bool mbEnableOcelot     = false;
     bool mbEnablePuppy      = false;

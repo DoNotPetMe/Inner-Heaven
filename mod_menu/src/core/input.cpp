@@ -173,4 +173,25 @@ bool GamepadRepeat(int button) {
     return GamepadPressed(button);
 }
 
+bool GamepadDown(int button) {
+    if (!s_PadConnected) return false;
+    return (s_PadCur.Gamepad.wButtons & static_cast<WORD>(button)) != 0;
+}
+
+void GetRightStick(float& outX, float& outY) {
+    outX = 0.0f;
+    outY = 0.0f;
+    if (!s_PadConnected) return;
+
+    const short dz = 8000;
+    short rx = s_PadCur.Gamepad.sThumbRX;
+    short ry = s_PadCur.Gamepad.sThumbRY;
+
+    if (rx >  dz) outX =  (rx - dz) / float(32767 - dz);
+    else if (rx < -dz) outX = (rx + dz) / float(32768 - dz);
+
+    if (ry >  dz) outY =  (ry - dz) / float(32767 - dz);
+    else if (ry < -dz) outY = (ry + dz) / float(32768 - dz);
+}
+
 } // namespace Input

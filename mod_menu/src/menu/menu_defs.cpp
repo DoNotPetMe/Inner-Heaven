@@ -658,6 +658,24 @@ static MenuNode BuildBuddyMenu(Config& c) {
                 MakeToggle("dwalkerInvisible","Make D-Walker invisible to enemies",                                     &c.dwalkerInvisible),
             }),
         }),
+        MakeSep(),
+        MakeSub("Multi-Buddy & Command Wheel", "Field several buddies at once and direct them from a radial wheel", {
+            MakeToggle("multiBuddies",      "Keep several buddies deployed at the same time",                          &c.multiBuddies),
+            MakeSep(),
+            MakeSub("Active Buddies", "Which buddies multi-buddy and the wheel manage", {
+                MakeToggle("buddyDDogActive",   "Include D-Dog",                                                       &c.buddyDDogActive),
+                MakeToggle("buddyQuietActive",  "Include Quiet",                                                       &c.buddyQuietActive),
+                MakeToggle("buddyDHorseActive", "Include D-Horse",                                                     &c.buddyDHorseActive),
+                MakeToggle("buddyDWalkerActive","Include D-Walker",                                                    &c.buddyDWalkerActive),
+            }),
+            MakeSep(),
+            MakeSub("Command Wheel", "Radial command-wheel overlay settings", {
+                MakeToggle("buddyWheel",        "Enable the command wheel overlay",                                    &c.buddyWheel),
+                MakeToggle("buddyWheelGamepad", "Open by holding Y on a controller",                                   &c.buddyWheelGamepad),
+                MakeToggle("buddyWheelKeyboard","Open by holding X on the keyboard",                                   &c.buddyWheelKeyboard),
+                MakeFloat ("buddyWheelScale",   "Wheel size multiplier",                          &c.buddyWheelScale, 0.5f, 2.0f, 0.1f, "x"),
+            }),
+        }),
     });
 }
 
