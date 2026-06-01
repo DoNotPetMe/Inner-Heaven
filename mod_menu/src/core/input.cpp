@@ -73,8 +73,11 @@ static LRESULT CALLBACK HookWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
     if (s_MenuOpen) {
         ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam);
 
+        bool isMouseMsg = (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST);
+        bool isKeyMsg   = (msg >= WM_KEYFIRST   && msg <= WM_KEYLAST);
+
         ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse || io.WantCaptureKeyboard)
+        if ((isMouseMsg && io.WantCaptureMouse) || (isKeyMsg && io.WantCaptureKeyboard))
             return 0;
     }
 
