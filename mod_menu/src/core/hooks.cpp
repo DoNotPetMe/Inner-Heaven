@@ -107,6 +107,8 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         s_Initialized = true;
     }
 
+    Input::PollGamepad();
+
     // Tick all features
     Features::Player::Tick();
     Features::Resources::Tick();

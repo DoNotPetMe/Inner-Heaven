@@ -20,4 +20,4 @@ add_library(InnerHeavenMenu SHARED
 )
 
 target_include_directories(InnerHeavenMenu PRIVATE src)
-target_link_libraries(InnerHeavenMenu PRIVATE imgui minhook d3d11 dxgi d3dcompiler)
+target_link_libraries(InnerHeavenMenu PRIVATE imgui minhook d3d11 dxgi d3dcompiler xinput)

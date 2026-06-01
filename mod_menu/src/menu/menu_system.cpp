@@ -1,4 +1,5 @@
 #include "menu_system.h"
+#include "../core/input.h"
 #include <imgui.h>
 #include <cstdio>
 #include <algorithm>
@@ -130,22 +131,37 @@ void MenuSystem::ChangeValue(int dir) {
 }
 
 void MenuSystem::HandleInput() {
-    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
-        return;
+    bool kbActive = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
-    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))    MoveSelection(-1);
-    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))   MoveSelection(1);
-    if (ImGui::IsKeyPressed(ImGuiKey_RightArrow))  ChangeValue(1);
-    if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))   ChangeValue(-1);
+    bool up    = (kbActive && ImGui::IsKeyPressed(ImGuiKey_UpArrow))    || Input::GamepadRepeat(Input::PAD_DPAD_UP);
+    bool down  = (kbActive && ImGui::IsKeyPressed(ImGuiKey_DownArrow))  || Input::GamepadRepeat(Input::PAD_DPAD_DOWN);
+    bool right = (kbActive && ImGui::IsKeyPressed(ImGuiKey_RightArrow)) || Input::GamepadRepeat(Input::PAD_DPAD_RIGHT);
+    bool left  = (kbActive && ImGui::IsKeyPressed(ImGuiKey_LeftArrow))  || Input::GamepadRepeat(Input::PAD_DPAD_LEFT);
 
-    if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
-        EnterSelected();
+    bool enter = (kbActive && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)))
+               || Input::GamepadPressed(Input::PAD_A);
 
-    if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_Backspace))
-        GoBack();
+    bool back  = (kbActive && (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_Backspace)))
+               || Input::GamepadPressed(Input::PAD_B);
 
-    if (ImGui::IsKeyPressed(ImGuiKey_Home)) { m_selected = 0; MoveSelection(0); }
-    if (ImGui::IsKeyPressed(ImGuiKey_End))  {
+    bool home  = (kbActive && ImGui::IsKeyPressed(ImGuiKey_Home)) || Input::GamepadPressed(Input::PAD_LB);
+    bool end   = (kbActive && ImGui::IsKeyPressed(ImGuiKey_End))  || Input::GamepadPressed(Input::PAD_RB);
+
+    if (up)    MoveSelection(-1);
+    if (down)  MoveSelection(1);
+    if (right) ChangeValue(1);
+    if (left)  ChangeValue(-1);
+    if (enter) EnterSelected();
+
+    if (back) {
+        if (m_stack.empty())
+            Input::SetMenuOpen(false);
+        else
+            GoBack();
+    }
+
+    if (home) { m_selected = 0; MoveSelection(0); }
+    if (end) {
         m_selected = static_cast<int>(m_current->children.size()) - 1;
         if (m_selected >= 0 && m_current->children[m_selected].type == MenuNode::Sep)
             MoveSelection(-1);
@@ -295,7 +311,10 @@ void MenuSystem::Render() {
 
     // Navigation hint
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.52f, 0.42f, 0.7f));
-    ImGui::TextUnformatted("[Arrows] Navigate  [Enter] Select  [Esc] Back  [INS] Close");
+    if (Input::IsGamepadConnected())
+        ImGui::TextUnformatted("[D-Pad] Navigate  [A] Select  [B] Back  [LB+RB] Close");
+    else
+        ImGui::TextUnformatted("[Arrows] Navigate  [Enter] Select  [Esc] Back  [INS] Close");
     ImGui::PopStyleColor();
 
     // Help text
