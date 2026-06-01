@@ -569,6 +569,7 @@ struct Config {
     // ── System ─────────────────────────────────────────────────────────
     bool luaConsoleOpen     = false;
     bool showHelp           = true;
+    bool showScanReport     = false;
 
     // Restore every setting to its default value.
     void Reset() { *this = Config{}; }

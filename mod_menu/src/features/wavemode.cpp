@@ -27,14 +27,29 @@ static const ArenaTheme s_Arenas[] = {
 static const int kArenaCount = (int)(sizeof(s_Arenas) / sizeof(s_Arenas[0]));
 
 // ── The IHWave Lua helper ────────────────────────────────────────────────────
-// Injected once into the game's Lua state. This is the single game-specific seam:
-// SpawnWave / SetHostile / Clear wrap the Fox Engine soldier-spawn API (guarded
-// with pcall so a missing function never crashes the game), and IsDetected
-// returns whether the player is currently being seen. The GkEnemy/TppSequence
-// calls below are the documented tuning points per game build.
+// Injected once into the game's Lua state.
+//
+// IMPORTANT REALITY (from researching Infinite Heaven's source + the deminified
+// game Lua): MGSV has NO clean runtime "spawn one soldier at XYZ" Lua call.
+// Enemy presence is defined by per-region route / command-post / ScriptBlock
+// data loaded from the game's fpk files. Infinite Heaven's free-roam patrols
+// work by editing that DATA layer and reloading the region — not by a runtime
+// spawn function. The runtime reinforcement path (TppReinforceBlock) needs a
+// command post (TppCommandPost2) and a preloaded reinforce ScriptBlock to exist
+// in the current area.
+//
+// So this helper drives the game's OWN spawn systems through the verified APIs:
+//   1. Request reinforcements on every command post in the area (real API).
+//   2. Escalate the alert/combat phase so the area's CPs call in more soldiers.
+//   3. As an optional fast-path, if an add-on (e.g. IHHook) has injected a real
+//      GkEnemy/SpawnSoldier helper, use it.
+// The C++ side counts living enemies in the ring via the entity list, so however
+// the soldiers arrive, the wave logic and HUD track them. Each call is pcall-
+// guarded so a missing function can never crash the game.
 static const char* kWaveLua = R"LUA(
 IHWave = IHWave or { units = {}, hostile = false }
 
+-- Optional fast-path: a real per-build spawn function, if one has been injected.
 function IHWave._spawnOne(x, y, z, hostile, diff)
   pcall(function()
     if GkEnemy and GkEnemy.SpawnSoldier then
@@ -44,15 +59,54 @@ function IHWave._spawnOne(x, y, z, hostile, diff)
   end)
 end
 
+-- Trigger the game's own reinforcement on any command posts present.
+function IHWave._requestReinforce()
+  pcall(function()
+    if TppReinforceBlock and TppReinforceBlock.StartReinforce then
+      -- StartReinforce keys off the active mission's reinforce CP table.
+      for cpId = 0, 7 do
+        pcall(function() TppReinforceBlock.StartReinforce(cpId) end)
+      end
+    end
+  end)
+  pcall(function()
+    if GameObject and GameObject.SendCommand then
+      GameObject.SendCommand({ type = "TppCommandPost2" },
+                             { id = "SetReinforceEnable", isEnable = true })
+      GameObject.SendCommand({ type = "TppCommandPost2" },
+                             { id = "RequestReinforce" })
+    end
+  end)
+end
+
+-- Escalate the area so existing CPs scramble soldiers toward the player.
+function IHWave._escalate()
+  pcall(function()
+    if GameObject and GameObject.SendCommand then
+      GameObject.SendCommand({ type = "TppCommandPost2" },
+                             { id = "SetPhase", phase = "ALERT" })
+    end
+  end)
+  pcall(function()
+    if mvars then mvars.mis_isInfiniteReinforce = true end
+    if gvars then gvars.ene_forceReinforce = true end
+  end)
+end
+
 function IHWave.SpawnWave(n, x, y, z, radius, diff, hostile)
   IHWave.hostile = hostile
+
+  -- 1) optional injected fast-path
   local twoPi = 6.2831853
   for i = 1, n do
     local a  = twoPi * (i / n)
-    local sx = x + math.cos(a) * radius
-    local sz = z + math.sin(a) * radius
-    IHWave._spawnOne(sx, y, sz, hostile, diff)
+    IHWave._spawnOne(x + math.cos(a) * radius, y, z + math.sin(a) * radius, hostile, diff)
   end
+
+  -- 2) drive the game's real reinforcement + escalation systems
+  IHWave._requestReinforce()
+  if hostile then IHWave._escalate() end
+
   pcall(function()
     if TppUiCommand and TppUiCommand.AnnounceLogView then
       TppUiCommand.AnnounceLogView("WAVE INCOMING")
@@ -67,6 +121,7 @@ function IHWave.SetHostile()
       if GkEnemy and GkEnemy.SetCombat then GkEnemy.SetCombat(id, true) end
     end)
   end
+  IHWave._escalate()
 end
 
 function IHWave.Clear()
@@ -77,6 +132,10 @@ function IHWave.Clear()
   end
   IHWave.units   = {}
   IHWave.hostile = false
+  pcall(function()
+    if mvars then mvars.mis_isInfiniteReinforce = false end
+    if gvars then gvars.ene_forceReinforce = false end
+  end)
 end
 
 -- Returns 1 if the player is currently detected/under alert, else 0.

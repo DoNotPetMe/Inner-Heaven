@@ -171,6 +171,12 @@ void RenderOverlay() {
     } __except(1) {}
 }
 
+int GetScanFound() {
+    return (s_BrightnessAddr?1:0) + (s_VPMatrixAddr?1:0)
+         + (s_EntityListAddr?1:0) + (s_PlayerPosAddr?1:0);
+}
+int GetScanTotal() { return 4; }
+
 int CountEnemiesInRadius(float cx, float cy, float cz, float radius) {
     if (!s_EntityListAddr) return -1;
 

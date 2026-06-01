@@ -31,6 +31,12 @@ void Init() {
     if (m) s_MaterialsBase = m;
 }
 
+int GetScanFound() {
+    return (s_GMPAddr?1:0) + (s_HeroismAddr?1:0) + (s_DemonAddr?1:0)
+         + (s_PlantsBase?1:0) + (s_MaterialsBase?1:0);
+}
+int GetScanTotal() { return 5; }
+
 void SetGMP(int v)        { if (s_GMPAddr)     Memory::Write<int>(s_GMPAddr, v); }
 void SetHeroism(int v)    { if (s_HeroismAddr) Memory::Write<int>(s_HeroismAddr, v); }
 void SetDemonPoints(int v){ if (s_DemonAddr)   Memory::Write<int>(s_DemonAddr, v); }

@@ -4,6 +4,8 @@ namespace Features::Visuals {
 
 void Init();
 void RenderOverlay();
+int GetScanFound();
+int GetScanTotal();
 
 // Counts living enemy entities (hp above threshold) within `radius` metres of
 // the given world-space centre. Used by the Wave Survival gamemode to drive its

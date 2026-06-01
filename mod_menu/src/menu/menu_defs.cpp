@@ -1181,7 +1181,10 @@ static MenuNode BuildDebugMenu(Config& c) {
         MakeSep(),
         MakeToggle("dumpMemory",        "Dump memory scan results to file",                                              &c.dumpMemory),
         MakeSep(),
-        MakeCmd("Run Scan Diagnostics", "Show which pattern scans and Lua APIs are available (results appear in-game announce log)", []() {
+        MakeCmd("Pattern Scan Report", "Open a window showing which memory patches and the Lua bridge resolved on your game build", []() {
+            Config::Get().showScanReport = !Config::Get().showScanReport;
+        }),
+        MakeCmd("Run Lua Diagnostics", "Probe which Lua namespaces (vars/gvars/Player/etc) exist (results appear in-game announce log)", []() {
             Features::GameLua::RunDiagnostics();
         }),
     });

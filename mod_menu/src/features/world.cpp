@@ -37,6 +37,12 @@ void Init() {
     if (ful) { s_FultonPatch.address = ful; s_FultonPatch.patched = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 }; }
 }
 
+int GetScanFound() {
+    return (s_TimeScaleAddr?1:0) + (s_TimeOfDayAddr?1:0) + (s_PlayerPosAddr?1:0)
+         + (s_WaypointAddr?1:0) + (s_AIDisable.address?1:0) + (s_FultonPatch.address?1:0);
+}
+int GetScanTotal() { return 6; }
+
 void TeleportToWaypoint() {
     if (!s_PlayerPosAddr || !s_WaypointAddr) return;
     for (int i = 0; i < 3; ++i)
