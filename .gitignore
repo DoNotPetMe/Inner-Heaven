@@ -1,0 +1,32 @@
+# Build
+build/
+out/
+cmake-build-*/
+*.obj
+*.o
+*.lib
+*.dll
+*.exe
+*.exp
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+
+# IDE
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln.docstates
+CMakeSettings.json
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Dependencies (submodules are tracked separately)
+external/imgui/
+external/minhook/
