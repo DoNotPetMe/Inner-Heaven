@@ -251,7 +251,7 @@ Output:
 ## Dependencies
 
 - [Dear ImGui](https://github.com/ocornut/imgui) — immediate-mode GUI
-- [MinHook](https://github.com/TsudaKageworker/minhook) — x86/x64 API hooking
+- [MinHook](https://github.com/TsudaKageyu/minhook) — x86/x64 API hooking
 
 Both are included as git submodules.
 
