@@ -8,6 +8,7 @@
 #include "../features/visuals.h"
 #include "../features/misc.h"
 #include "../features/lua_console.h"
+#include "../features/game_lua.h"
 #include <MinHook.h>
 
 namespace Hooks {
@@ -46,11 +47,8 @@ static void ResolveAddresses() {
     ID3D11Device*        pDevice    = nullptr;
     ID3D11DeviceContext* pContext   = nullptr;
 
-    D3D11CreateDeviceAndSwapChain(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
-        nullptr, 0, D3D11_SDK_VERSION,
-        &sd, &pSwapChain, &pDevice, nullptr, &pContext
-    );
+    D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
+        nullptr, 0, D3D11_SDK_VERSION, &sd, &pSwapChain, &pDevice, nullptr, &pContext);
 
     void** vTable = *reinterpret_cast<void***>(pSwapChain);
     s_PresentAddr       = vTable[8];
@@ -65,7 +63,6 @@ static void ResolveAddresses() {
 
 void Init() {
     ResolveAddresses();
-
     MH_Initialize();
     MH_CreateHook(s_PresentAddr, &hkPresent, reinterpret_cast<void**>(&oPresent));
     MH_CreateHook(s_ResizeBuffersAddr, &hkResizeBuffers, reinterpret_cast<void**>(&oResizeBuffers));
@@ -99,17 +96,23 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         Features::Visuals::Init();
         Features::Misc::Init();
         Features::LuaConsole::Init();
+        Features::GameLua::Init();
+
+        Menu::Init();
 
         pDevice->Release();
         pContext->Release();
         s_Initialized = true;
     }
 
+    // Tick all features
     Features::Player::Tick();
     Features::Resources::Tick();
     Features::World::Tick();
     Features::Misc::Tick();
+    Features::GameLua::Tick();
 
+    // Render
     Renderer::BeginFrame();
 
     if (Input::IsMenuOpen())

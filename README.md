@@ -2,62 +2,110 @@
 
 A singleplayer mod menu and DLL injector for **Metal Gear Solid V: The Phantom Pain**.
 
+Inspired by [Infinite Heaven](https://www.nexusmods.com/metalgearsolidvtpp/mods/45) by TinManTex — rebuilt from scratch with a unique feature set and our own implementation.
+
 > *"The world calls for wetwork, and we answer. No greater good. No just cause."*
 
-## Features
+## Menu System
+
+Inner Heaven uses a **hierarchical list-based menu** modeled after Infinite Heaven's navigation:
+
+- **Arrow keys** — Navigate up/down, change values left/right
+- **Enter** — Enter submenus, toggle options, execute commands
+- **Escape / Backspace** — Go back to parent menu
+- **INSERT or F3** — Toggle menu open/close
+- **END** — Eject the mod cleanly
+
+The menu shows a breadcrumb path at the top, a scrollable item list, navigation hints, and context-sensitive help text at the bottom.
+
+## Feature Categories (~160+ settings)
 
 ### Player
-- God Mode — take no damage
-- Infinite Ammo — never run out of ammunition
-- No Reload — skip magazine changes entirely
-- Infinite Suppressors — suppressors never wear out
-- No Recoil — perfectly stable aim
-- One Hit Kill — enemies die in a single hit
-- Stealth Mode — detection meter is frozen at zero
-- Infinite Reflex Mode — reflex time never expires
-- Super Speed — configurable movement speed multiplier
+- **Combat**: God Mode, Infinite Ammo, No Reload, Infinite Suppressors, No Recoil, One Hit Kill, Infinite Reflex, Rapid Fire
+- **Movement**: Super Speed (configurable multiplier), No Fall Damage, Custom Player Scale
+- **Stealth**: Stealth Mode (frozen detection)
+- **Stats**: Player Health Scale (0-650%), Hero/Demon point controls
+
+### Appearance
+- Player Type selection (Snake, DD Male/Female, Avatar, Liquid, Ocelot, Quiet)
+- 17 suit/outfit types (Sneaking Suit, Battle Dress, Parasite Suit, MGS1, Raiden, Ninja, Tuxedo, etc.)
+- Camo pattern index, headgear, bionic arm type
+
+### Camera
+- Free Camera with WASD+Space/Ctrl movement and adjustable speed
+- FOV override per mode (Normal, Aiming, Hiding, CQC)
+- Focal length, aperture, and focus distance controls
 
 ### Resources
-- GMP Editor — set or lock your GMP to any value
-- Heroism Editor — set or lock heroism
-- Demon Points Editor — control your horn growth
-- Max All Plants / Materials — fill all resource slots
-- Quick presets: Max GMP (5M), Max Heroism (1M), Zero Demon Points
+- GMP, Heroism, Demon Points — set, lock, or use presets (5M GMP, 1M Heroism, Zero Demon)
+- Max All Plants / Materials
+- Resource collection scale per type (Material, Plant, Diamond, Container: 10-1000%)
 
 ### World
-- Slow Motion — configurable time scale (0.05–0.9x)
-- Time of Day — slider with Dawn/Noon/Dusk/Night presets
-- Weather Control — Clear, Cloudy, Rainy, Foggy, Sandstorm
-- No Enemy AI — freeze all enemy behavior
-- Infinite Fulton — unlimited extractions
-- Teleport to Waypoint — instantly move to your map marker
+- **Time Scale**: Slow motion, clock speed (1-10000x), speed camera controls
+- **Time of Day**: Override with slider + Dawn/Noon/Dusk/Midnight presets
+- **Weather**: Force Sunny/Cloudy/Rainy/Sandstorm/Foggy/Pouring, fog density & type
+- No Enemy AI, Infinite Fulton, Teleport to Waypoint
 
-### Visuals
-- ESP — enemy bounding boxes, distance readouts, health bars
-- Custom FOV — 40–140 degree field of view
-- Night Vision — brightness amplification
-- Crosshair Overlay — customizable size
+### Enemy
+- **Soldier Params**: Health/Sight/Night Sight/Hearing scale (0-400%), Item Drop Chance
+- **Phases**: Force alert phase (Sneak/Caution/Evasion/Alert), Keep Phase lock
+- **Reinforcements**: Force super reinforce, heli reinforce, count/level ranges
+- **Custom Prep**: Per-equipment prevalence (Sniper, Missile, MG, Shotgun, SMG, Armor, Shield, Helmet, NVG, Gas Mask, Decoy, Mine, Camera)
+- Revenge mode, Wild Card soldiers, LRRP foot patrols
+
+### Mission
+- Skip preparation, Start on Foot, Subsistence mode
+- Gameplay restrictions: Game Over on Discovery, Disable Game Over/Retry/Out of Bounds
+- HUD: Disable head/world/X-ray markers
+- Support menu controls: Disable support/buddy/attack/fulton menus
+
+### Helicopter
+- Invincible Heli, Search Light override, Disable Pull Out
+- LZ Wait Height, Door Open Time, Disable Landing Zones
+
+### Buddy
+- Quiet weapon selection (6 variants with suppressed options)
+- D-Dog equipment (Naked, Sneaking Stun/Knife, Battle Dress, Fulton)
+- D-Horse and D-Walker loadout selection
+
+### Mother Base
+- **Characters**: Toggle Ocelot, Puppy, Code Talker, Birds, Buddies
+- **Soldiers**: Equip range, additional spawns, prioritize female, lethal actions, morale
+- **Patrols**: Support/Attack heli count, Walker Gears
+- **Assets**: Posters, collection repop, unlock goal doors
+
+### Fulton
+- Auto-fulton mode, recover critical, fulton/wormhole level
+- Variation range, dying/sleep penalties
+
+### Side Ops
+- Force quest number, selection mode, repop mode
+- Enable quests during story missions, shooting practice retry
+
+### Cutscenes
+- Use selected soldier in all cutscenes
+- Force action during demos, weather/time overrides
+
+### Events
+- Free roam events: HUNTED, CRASHLAND, LOST COMS (0-100% chance each)
+- MB War Games with 8 faction profiles
+
+### Visuals (Inner Heaven Exclusive)
+- **ESP**: Bounding boxes, distance, health bars for enemies
+- **Night Vision**: Brightness amplification with adjustable intensity
+- **Crosshair**: Tactical overlay with gap design, adjustable size
 
 ### Misc
-- Save / Load Position — bookmark and return to any location
-- Free Camera — detached camera with WASD + Space/Ctrl movement
-- Custom Player Scale — resize Snake (0.1x – 5.0x)
-- Rapid Fire — remove fire rate limiter
-- No Fall Damage — survive any drop
+- Save/Load Position
+- Lua Console (open from menu)
+- Show Help toggle, Debug controls
 
-### Lua Console
-- **Built-in Fox Engine Lua 5.1 console** — execute any game Lua command live
-- Command history with Up/Down arrow navigation
-- Syntax error and runtime error reporting
-- Quick-execute buttons: Max HP, Reflex ON, Supply Drop, Clear Weather
-- Run any `TppMission`, `Player`, `TppWeather`, `GkEventTimerManager` call directly
-
-## Controls
-
-| Key | Action |
-|-----|--------|
-| INSERT | Toggle mod menu |
-| END | Eject the mod cleanly |
+### Lua Console (Inner Heaven Exclusive)
+- **Live Fox Engine Lua 5.1 console** — execute any game command interactively
+- Command history with Up/Down arrows
+- Quick-execute buttons for common operations
+- Full error reporting with syntax and runtime distinction
 
 ## Building
 
@@ -84,15 +132,16 @@ Output:
 1. Place `InnerHeavenInjector.exe` and `InnerHeavenMenu.dll` in the same folder.
 2. Launch MGSV: The Phantom Pain.
 3. Run `InnerHeavenInjector.exe` **as Administrator**.
-4. Press **INSERT** in-game to open the menu.
+4. Press **INSERT** or **F3** in-game to open the menu.
 
 ## Technical Details
 
-- **Injection method**: `CreateRemoteThread` + `LoadLibraryA` — straightforward and reliable since MGSV has no anti-cheat in singleplayer.
-- **Rendering hook**: DirectX 11 `IDXGISwapChain::Present` hook via MinHook trampolines.
-- **Overlay**: Dear ImGui with a custom MGS-inspired dark military green theme.
-- **Memory manipulation**: AOB (Array of Bytes) pattern scanning for version-independent address resolution. Byte patching for toggleable features, per-frame value writes for continuous effects. Health and ammo patterns verified against community Cheat Engine tables.
-- **Lua bridge**: Captures the game's embedded Lua 5.1 state at runtime via AOB patterns from IHHook, then exposes the full Fox Engine Lua API through an in-menu console.
+- **Injection**: `CreateRemoteThread` + `LoadLibraryA` — no anti-cheat in MGSV singleplayer
+- **Rendering**: DirectX 11 `IDXGISwapChain::Present` hook (vtable index 8) via MinHook
+- **Overlay**: Dear ImGui with IH-inspired dark theme and hierarchical ListBox navigation
+- **Memory**: AOB pattern scanning for version-independent addresses. Health (`F3 0F 11 0E`) and ammo (`66 44 89 1C 48`) patterns verified against community CE tables
+- **Lua Bridge**: Captures the game's Lua 5.1 state at runtime, exposes full Fox Engine Lua API. Lua patterns sourced from IHHook (TinManTex)
+- **Feature Application**: Byte patching for toggles, per-frame value writes for continuous effects, Lua execution for game-system features
 
 ## Dependencies
 
@@ -100,6 +149,12 @@ Output:
 - [MinHook](https://github.com/TsudaKageworker/minhook) — x86/x64 API hooking
 
 Both are included as git submodules.
+
+## Acknowledgments
+
+- [TinManTex/IHHook](https://github.com/TinManTex/IHHook) — reference for DX11 hooking and Lua API patterns
+- [Infinite Heaven](https://www.nexusmods.com/metalgearsolidvtpp/mods/45) — inspiration for menu design and feature scope
+- MGSV modding community CE tables — verified AOB patterns for health, ammo, and more
 
 ## Disclaimer
 

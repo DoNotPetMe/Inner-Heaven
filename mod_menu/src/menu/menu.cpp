@@ -1,45 +1,29 @@
 #include "menu.h"
-#include "tabs/tab_player.h"
-#include "tabs/tab_resources.h"
-#include "tabs/tab_world.h"
-#include "tabs/tab_visuals.h"
-#include "tabs/tab_misc.h"
+#include "menu_system.h"
+#include "menu_defs.h"
 #include "../features/lua_console.h"
-#include <imgui.h>
+#include "../config.h"
 
 namespace Menu {
 
-static void DrawHeader() {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.30f, 0.55f, 0.24f, 1.0f));
-    ImGui::TextUnformatted("INNER HEAVEN");
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    ImGui::TextDisabled("MGSV:TPP");
-    ImGui::SameLine(ImGui::GetWindowWidth() - 160);
-    ImGui::TextDisabled("[INSERT] Toggle Menu");
-    ImGui::Separator();
+void Init() {
+    MenuSystem::Get().SetRoot(BuildMenuTree());
 }
 
 void Render() {
-    ImGui::SetNextWindowSize(ImVec2(680, 520), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(100, 100), ImGuiCond_FirstUseEver);
+    MenuSystem::Get().Render();
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
-    ImGui::Begin("Inner Heaven##main", nullptr, flags);
+    if (Config::Get().luaConsoleOpen)
+        Features::LuaConsole::RenderWindow();
 
-    DrawHeader();
-
-    if (ImGui::BeginTabBar("##tabs", ImGuiTabBarFlags_FittingPolicyResizeDown)) {
-        Tabs::Player::Render();
-        Tabs::Resources::Render();
-        Tabs::World::Render();
-        Tabs::Visuals::Render();
-        Tabs::Misc::Render();
-        Features::LuaConsole::RenderTab();
-        ImGui::EndTabBar();
+    if (Config::Get().showPosition) {
+        ImGui::SetNextWindowPos(ImVec2(10, 560), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(250, 40), ImGuiCond_FirstUseEver);
+        ImGui::Begin("##pos", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize
+            | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings);
+        ImGui::TextDisabled("Position display requires pattern scan");
+        ImGui::End();
     }
-
-    ImGui::End();
 }
 
 } // namespace Menu

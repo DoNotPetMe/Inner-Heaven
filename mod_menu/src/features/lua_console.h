@@ -3,6 +3,6 @@
 namespace Features::LuaConsole {
 
 void Init();
-void RenderTab();
+void RenderWindow();
 
 } // namespace Features::LuaConsole

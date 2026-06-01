@@ -1,4 +1,5 @@
 #include "input.h"
+#include "../menu/menu_system.h"
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 
@@ -6,29 +7,25 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM,
 
 namespace Input {
 
-static HWND    s_GameWindow = nullptr;
+static HWND    s_GameWindow  = nullptr;
 static WNDPROC s_OrigWndProc = nullptr;
-static bool    s_MenuOpen = false;
-static bool    s_KeyStates[256] = {};
-static bool    s_KeyPrev[256]   = {};
+static bool    s_MenuOpen    = false;
 
 static LRESULT CALLBACK HookWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (msg == WM_KEYDOWN && wParam == VK_INSERT && !(lParam & 0x40000000)) {
-        s_MenuOpen = !s_MenuOpen;
+    // INSERT toggles menu (matching IH's F3, but INSERT is our default)
+    if (msg == WM_KEYDOWN && !(lParam & 0x40000000)) {
+        if (wParam == VK_INSERT || wParam == VK_F3) {
+            s_MenuOpen = !s_MenuOpen;
+            MenuSystem::Get().SetOpen(s_MenuOpen);
 
-        ImGuiIO& io = ImGui::GetIO();
-        if (s_MenuOpen) {
-            io.MouseDrawCursor = true;
-            io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
-        } else {
-            io.MouseDrawCursor = false;
+            ImGuiIO& io = ImGui::GetIO();
+            io.MouseDrawCursor = s_MenuOpen;
+            if (!s_MenuOpen)
+                io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+            else
+                io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
         }
     }
-
-    if (msg == WM_KEYDOWN)
-        s_KeyStates[wParam & 0xFF] = true;
-    if (msg == WM_KEYUP)
-        s_KeyStates[wParam & 0xFF] = false;
 
     if (s_MenuOpen) {
         ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam);
@@ -58,13 +55,11 @@ void Shutdown() {
 bool IsMenuOpen() { return s_MenuOpen; }
 
 bool IsKeyPressed(int vKey) {
-    bool pressed = s_KeyStates[vKey & 0xFF] && !s_KeyPrev[vKey & 0xFF];
-    s_KeyPrev[vKey & 0xFF] = s_KeyStates[vKey & 0xFF];
-    return pressed;
+    return (GetAsyncKeyState(vKey) & 1) != 0;
 }
 
 bool IsKeyDown(int vKey) {
-    return s_KeyStates[vKey & 0xFF];
+    return (GetAsyncKeyState(vKey) & 0x8000) != 0;
 }
 
 } // namespace Input
