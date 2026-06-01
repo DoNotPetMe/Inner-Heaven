@@ -4,12 +4,14 @@
 #include "../memory/pattern.h"
 #include <imgui.h>
 #include <cmath>
+#include <cstdio>
 
 namespace Features::Visuals {
 
 static uintptr_t s_BrightnessAddr = 0;
 static uintptr_t s_VPMatrixAddr   = 0;
 static uintptr_t s_EntityListAddr = 0;
+static uintptr_t s_PlayerPosAddr  = 0;
 
 struct Vec3 { float x, y, z; };
 struct Vec2 { float x, y; };
@@ -38,18 +40,46 @@ void Init() {
 
     uintptr_t el = Pattern::Scan("48 8B ?? ?? ?? ?? ?? 48 85 C0 74 ?? 48 8D ?? ?? ?? E8 ?? ?? ?? ?? 48 8B ?? 48 85 C0 74", base, size);
     if (el) s_EntityListAddr = el;
+
+    uintptr_t pos = Pattern::Scan("F3 0F 11 ?? ?? ?? ?? ?? F3 0F 11 ?? ?? ?? ?? ?? F3 0F 11 ?? ?? ?? ?? ?? 48 8B ?? ?? E8", base, size);
+    if (pos) s_PlayerPosAddr = pos;
 }
 
 static void DrawCrosshair(ImDrawList* dl, float w, float h) {
     auto& c = Config::Get();
     float cx = w * 0.5f, cy = h * 0.5f;
-    float sz = (float)c.crosshairSize, gap = sz * 0.3f;
-    ImU32 col = IM_COL32(0, 255, 0, 200);
-    dl->AddLine(ImVec2(cx-sz,cy), ImVec2(cx-gap,cy), col, 1.5f);
-    dl->AddLine(ImVec2(cx+gap,cy), ImVec2(cx+sz,cy), col, 1.5f);
-    dl->AddLine(ImVec2(cx,cy-sz), ImVec2(cx,cy-gap), col, 1.5f);
-    dl->AddLine(ImVec2(cx,cy+gap), ImVec2(cx,cy+sz), col, 1.5f);
-    dl->AddCircle(ImVec2(cx,cy), 2.0f, col, 12, 1.0f);
+    float sz = (float)c.crosshairSize;
+    float gap = (float)c.crosshairGap;
+    float th = (float)c.crosshairThickness;
+    int alpha = (int)(c.crosshairOpacity * 255.0f);
+    ImU32 col = IM_COL32(c.crosshairColorR, c.crosshairColorG, c.crosshairColorB, alpha);
+
+    switch (c.crosshairStyle) {
+    default:
+    case 0: // CROSS
+        dl->AddLine(ImVec2(cx-sz-gap,cy), ImVec2(cx-gap,cy), col, th);
+        dl->AddLine(ImVec2(cx+gap,cy), ImVec2(cx+gap+sz,cy), col, th);
+        dl->AddLine(ImVec2(cx,cy-sz-gap), ImVec2(cx,cy-gap), col, th);
+        dl->AddLine(ImVec2(cx,cy+gap), ImVec2(cx,cy+gap+sz), col, th);
+        dl->AddCircleFilled(ImVec2(cx,cy), th*0.8f, col, 8);
+        break;
+    case 1: // DOT
+        dl->AddCircleFilled(ImVec2(cx,cy), th*2.0f, col, 12);
+        break;
+    case 2: // CIRCLE
+        dl->AddCircle(ImVec2(cx,cy), sz, col, 24, th);
+        dl->AddCircleFilled(ImVec2(cx,cy), th, col, 8);
+        break;
+    case 3: // T_SHAPE (no bottom line)
+        dl->AddLine(ImVec2(cx-sz-gap,cy), ImVec2(cx-gap,cy), col, th);
+        dl->AddLine(ImVec2(cx+gap,cy), ImVec2(cx+gap+sz,cy), col, th);
+        dl->AddLine(ImVec2(cx,cy-sz-gap), ImVec2(cx,cy-gap), col, th);
+        break;
+    case 4: // CHEVRON
+        dl->AddLine(ImVec2(cx-sz,cy+sz*0.5f), ImVec2(cx,cy-sz*0.3f), col, th);
+        dl->AddLine(ImVec2(cx+sz,cy+sz*0.5f), ImVec2(cx,cy-sz*0.3f), col, th);
+        break;
+    }
 }
 
 void RenderOverlay() {
@@ -63,6 +93,33 @@ void RenderOverlay() {
 
     if (c.crosshair)
         DrawCrosshair(dl, sw, sh);
+
+    // FPS counter (top-right)
+    if (c.showFPS) {
+        char fps[32];
+        snprintf(fps, sizeof(fps), "FPS: %.0f", ImGui::GetIO().Framerate);
+        dl->AddText(ImVec2(sw - 100, 10), IM_COL32(0, 255, 0, 220), fps);
+    }
+
+    // Frame time
+    if (c.showFrameTime) {
+        char ft[32];
+        snprintf(ft, sizeof(ft), "%.2f ms", 1000.0f / ImGui::GetIO().Framerate);
+        float y = c.showFPS ? 28.0f : 10.0f;
+        dl->AddText(ImVec2(sw - 100, y), IM_COL32(200, 200, 200, 200), ft);
+    }
+
+    // Player position display
+    if (c.showPosition && s_PlayerPosAddr) {
+        __try {
+            float px = Memory::Read<float>(s_PlayerPosAddr);
+            float py = Memory::Read<float>(s_PlayerPosAddr + 4);
+            float pz = Memory::Read<float>(s_PlayerPosAddr + 8);
+            char pos[64];
+            snprintf(pos, sizeof(pos), "X:%.1f Y:%.1f Z:%.1f", px, py, pz);
+            dl->AddText(ImVec2(10, sh - 30), IM_COL32(255, 255, 255, 200), pos);
+        } __except(1) {}
+    }
 
     if (!c.espEnabled || !s_VPMatrixAddr || !s_EntityListAddr)
         return;

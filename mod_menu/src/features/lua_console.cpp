@@ -62,7 +62,7 @@ void Init() {
     else
         Log("Lua: some functions not resolved", COL_SYS);
 
-    Log("Examples: Player.SetMaxHp(100000)  TppWeather.SetCurrentWeather(TppDefine.WEATHER.SUNNY)", COL_SYS);
+    Log("Examples: Player.ChangeLifeMaxValue(50000)  TppWeather.ForceRequestWeather(1,2.0)", COL_SYS);
 }
 
 static void Execute(const char* code) {
@@ -112,11 +112,11 @@ void RenderWindow() {
     }
 
     // Quick buttons
-    if (ImGui::Button("Max HP")) Execute("Player.SetMaxHp(100000)");
+    if (ImGui::Button("Max HP")) Execute("pcall(function() Player.ResetLifeMaxValue() Player.ChangeLifeMaxValue(50000) end)");
     ImGui::SameLine();
-    if (ImGui::Button("Supply")) Execute("TppMission.ReserveSupplyDrop()");
+    if (ImGui::Button("5M GMP")) Execute("pcall(function() TppMotherBaseManagement.SetGmp{gmp=5000000} end)");
     ImGui::SameLine();
-    if (ImGui::Button("Clear Weather")) Execute("TppWeather.SetCurrentWeather(TppDefine.WEATHER.SUNNY)");
+    if (ImGui::Button("Sunny")) Execute("pcall(function() TppWeather.ForceRequestWeather(1,2.0) end)");
     ImGui::SameLine();
     if (ImGui::Button("Clear")) s_Log.clear();
 
