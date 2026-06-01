@@ -1,7 +1,6 @@
 #include "lua_console.h"
 #include "../config.h"
-#include "../memory/memory.h"
-#include "../memory/pattern.h"
+#include "game_lua.h"
 #include <imgui.h>
 #include <string>
 #include <vector>
@@ -9,17 +8,10 @@
 
 namespace Features::LuaConsole {
 
-struct lua_State;
-using lua_pcall_t       = int(__fastcall*)(lua_State* L, int nargs, int nresults, int errfunc);
-using luaL_loadstring_t = int(__fastcall*)(lua_State* L, const char* s);
-using lua_tolstring_t   = const char*(__fastcall*)(lua_State* L, int idx, size_t* len);
-using lua_settop_t      = void(__fastcall*)(lua_State* L, int idx);
-
-static lua_pcall_t       s_pcall      = nullptr;
-static luaL_loadstring_t s_loadstring = nullptr;
-static lua_tolstring_t   s_tolstring  = nullptr;
-static lua_settop_t      s_settop     = nullptr;
-static lua_State*        s_L          = nullptr;
+// NOTE: this console no longer owns a Lua bridge of its own. It delegates to
+// Features::GameLua, which is the single bridge in the mod. That bridge runs
+// queued code on the GAME thread (see game_lua.cpp); executing Lua from the
+// render thread, as this file used to, races the VM and silently fails.
 
 struct LogEntry { std::string text; ImVec4 color; };
 static std::vector<LogEntry> s_Log;
@@ -36,54 +28,33 @@ static ImVec4 COL_SYS = ImVec4(0.50f, 0.70f, 0.50f, 1.0f);
 static void Log(const std::string& t, ImVec4 c) { s_Log.push_back({t,c}); s_Scroll = true; }
 
 void Init() {
-    uintptr_t base = Memory::GetBaseAddress();
-    size_t    size = Memory::GetModuleSize();
-
-    uintptr_t pc = Pattern::Scan("56 48 83 EC 30 44 89 C6 4C 8B 49", base, size);
-    if (pc) s_pcall = reinterpret_cast<lua_pcall_t>(pc);
-
-    uintptr_t ls = Pattern::Scan("48 89 D6 48 89 CF E8 ?? ?? ?? ?? 48 89 F2 44 89 C1", base, size);
-    if (ls) s_loadstring = reinterpret_cast<luaL_loadstring_t>(ls);
-
-    uintptr_t tl = Pattern::Scan("53 48 83 EC 20 89 D3 48 89 CF E8 ?? ?? ?? ?? 83 78 ?? 04", base, size);
-    if (tl) s_tolstring = reinterpret_cast<lua_tolstring_t>(tl);
-
-    uintptr_t st = Pattern::Scan("85 D2 78 ?? 48 8B 41 ?? 48 8D 04 D0", base, size);
-    if (st) s_settop = reinterpret_cast<lua_settop_t>(st);
-
-    uintptr_t ss = Pattern::Scan("48 8B 0D ?? ?? ?? ?? 48 85 C9 74 ?? E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? BA 01", base, size);
-    if (ss) {
-        int32_t off = Memory::Read<int32_t>(ss + 3);
-        s_L = Memory::Read<lua_State*>(ss + 7 + off);
-    }
-
-    if (s_L && s_pcall && s_loadstring)
-        Log("Lua console ready - Fox Engine Lua 5.1", COL_SYS);
+    if (Features::GameLua::IsReady())
+        Log("Lua bridge CONNECTED (runs on game thread).", COL_SYS);
     else
-        Log("Lua: some functions not resolved", COL_SYS);
+        Log("Lua bridge NOT connected yet - load into a mission/FOB, then retry. "
+            "See the Pattern Scan Report if it stays red.", COL_SYS);
 
+    Log("Code runs on the game thread. To see output in-game, call "
+        "TppUiCommand.AnnounceLogView(tostring(x)).", COL_SYS);
     Log("Examples: Player.ChangeLifeMaxValue(50000)  TppWeather.ForceRequestWeather(1,2.0)", COL_SYS);
 }
 
 static void Execute(const char* code) {
     Log("> " + std::string(code), COL_IN);
-    if (!s_L || !s_pcall || !s_loadstring) { Log("[error] Lua not connected", COL_ERR); return; }
-
-    if (s_loadstring(s_L, code) != 0) {
-        if (s_tolstring) { const char* e = s_tolstring(s_L, -1, nullptr); Log(e ? e : "Compile error", COL_ERR); }
-        if (s_settop) s_settop(s_L, 0);
+    if (!Features::GameLua::IsReady()) {
+        Log("[error] Lua bridge not connected (see Pattern Scan Report)", COL_ERR);
         return;
     }
-    if (s_pcall(s_L, 0, 1, 0) != 0) {
-        if (s_tolstring) { const char* e = s_tolstring(s_L, -1, nullptr); Log(e ? e : "Runtime error", COL_ERR); }
-        if (s_settop) s_settop(s_L, 0);
-        return;
-    }
-    if (s_tolstring) {
-        const char* r = s_tolstring(s_L, -1, nullptr);
-        if (r && strlen(r) > 0) Log(r, COL_OUT);
-    }
-    if (s_settop) s_settop(s_L, 0);
+    // Delegate to the single game-thread bridge. Wrap as a statement (so
+    // assignments like `vars.x=5` work) and surface any runtime error via the
+    // in-game log. To print an expression's value, type it as
+    // `TppUiCommand.AnnounceLogView(tostring(<expr>))`.
+    std::string wrapped =
+        "do local ok,err = pcall(function() " + std::string(code) + " end) "
+        "if not ok and TppUiCommand and TppUiCommand.AnnounceLogView then "
+        "TppUiCommand.AnnounceLogView('IH ERR: '..tostring(err)) end end";
+    Features::GameLua::RunCode(wrapped.c_str());
+    Log("[queued -> game thread; errors show in the in-game log]", COL_SYS);
 }
 
 static int InputCB(ImGuiInputTextCallbackData* d) {

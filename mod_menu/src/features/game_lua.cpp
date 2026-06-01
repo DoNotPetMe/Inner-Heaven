@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <windows.h>
+#include <deque>
+#include <string>
 
 namespace Features::GameLua {
 
@@ -24,8 +26,63 @@ static lua_State*        s_L          = nullptr;
 static int s_ScanFound = 0;
 static int s_ScanTotal = 5;
 
+// ── Game-thread command queue ───────────────────────────────────────────────
+// CRITICAL: MGSV runs its Lua VM on the game thread. We must NOT call into
+// s_L from the render thread (the DX11 Present hook). Instead, feature ticks
+// (render thread) enqueue Lua here, and we drain the queue from inside the
+// pcall hook, which is guaranteed to be running on the game thread with the
+// VM in a valid state. This is the same approach IHHook uses.
+static CRITICAL_SECTION       s_queueLock;
+static bool                   s_queueInit = false;
+static std::deque<std::string> s_queue;
+static bool                   s_draining  = false;
+static constexpr size_t       kMaxQueue   = 128;
+
+static void Enqueue(const char* code) {
+    if (!s_queueInit) return;
+    EnterCriticalSection(&s_queueLock);
+    if (s_queue.size() < kMaxQueue) s_queue.emplace_back(code);
+    LeaveCriticalSection(&s_queueLock);
+}
+
+// Compile + run one chunk on the CURRENT (game) thread, leaving the Lua stack
+// exactly as it was. loadstring pushes 1; a balanced pcall(0,0) pops it on
+// success; on error an error object is left which we pop with a relative
+// settop(-2) (== lua_pop 1). No absolute stack index needed, so this is safe
+// to run while nested inside the game's own pcall (its args stay intact).
+static void RunChunkRaw(lua_State* L, const char* code) {
+    if (!L || !s_loadstring || !o_pcall) return;
+    if (s_loadstring(L, code) != 0) {        // compile error -> error string on top
+        if (s_settop) s_settop(L, -2);       // pop it
+        return;
+    }
+    if (o_pcall(L, 0, 0, 0) != 0) {          // runtime error -> error object on top
+        if (s_settop) s_settop(L, -2);       // pop it
+    }
+}
+
+static void DrainQueue(lua_State* L) {
+    for (;;) {
+        std::string code;
+        EnterCriticalSection(&s_queueLock);
+        if (s_queue.empty()) { LeaveCriticalSection(&s_queueLock); break; }
+        code = std::move(s_queue.front());
+        s_queue.pop_front();
+        LeaveCriticalSection(&s_queueLock);
+        RunChunkRaw(L, code.c_str());
+    }
+}
+
 static int __fastcall pcall_hook(lua_State* L, int nargs, int nresults, int errfunc) {
-    if (!s_L && L) s_L = L;
+    if (L) s_L = L;
+    // Drain queued mod commands on the game thread, before the game's own call.
+    // Guard against re-entrancy (our own o_pcall below bypasses the hook, but
+    // be safe regardless).
+    if (L && !s_draining) {
+        s_draining = true;
+        DrainQueue(L);
+        s_draining = false;
+    }
     return o_pcall(L, nargs, nresults, errfunc);
 }
 
@@ -33,6 +90,8 @@ void Init() {
     uintptr_t base = Memory::GetBaseAddress();
     size_t    size = Memory::GetModuleSize();
     s_ScanFound = 0;
+
+    if (!s_queueInit) { InitializeCriticalSection(&s_queueLock); s_queueInit = true; }
 
     const char* pcallPats[] = {
         "56 48 83 EC 30 44 89 C6 4C 8B 49",
@@ -79,19 +138,23 @@ void Init() {
 
 bool IsReady() { return s_L && o_pcall && s_loadstring; }
 
+// Queue Lua to run on the game thread (see DrainQueue). Safe to call from the
+// render thread / feature ticks.
 void RunCode(const char* luaCode) {
     if (!s_L || !s_loadstring || !o_pcall) return;
-    if (s_loadstring(s_L, luaCode) != 0) { if (s_settop) s_settop(s_L, 0); return; }
-    if (o_pcall(s_L, 0, 0, 0) != 0)     { if (s_settop) s_settop(s_L, 0); return; }
+    Enqueue(luaCode);
 }
 
+// Synchronous query that must return a value to the caller this frame. This
+// runs on the calling thread; reserve it for read-only probes (e.g. the wave
+// HUD's detection check), not for state mutation.
 int RunCodeInt(const char* luaCode, int fallback) {
     if (!s_L || !s_loadstring || !o_pcall) return fallback;
-    if (s_loadstring(s_L, luaCode) != 0) { if (s_settop) s_settop(s_L, 0); return fallback; }
-    if (o_pcall(s_L, 0, 1, 0) != 0)     { if (s_settop) s_settop(s_L, 0); return fallback; }
+    if (s_loadstring(s_L, luaCode) != 0) { if (s_settop) s_settop(s_L, -2); return fallback; }
+    if (o_pcall(s_L, 0, 1, 0) != 0)     { if (s_settop) s_settop(s_L, -2); return fallback; }
     int result = fallback;
     if (s_tolstring) { const char* s = s_tolstring(s_L, -1, nullptr); if (s) result = atoi(s); }
-    if (s_settop) s_settop(s_L, 0);
+    if (s_settop) s_settop(s_L, -2);
     return result;
 }
 
@@ -222,27 +285,25 @@ void Tick() {
     }
 
     // ── Appearance ────────────────────────────────────────────────────
+    // NOTE: appearance vars take effect on the next player (re)load, not
+    // instantly. Field names verified against MGSV/IH source:
+    // vars.playerType / playerPartsType / playerCamoType / playerHandType /
+    // playerFaceEquipId / playerFaceId.
     static int pType = -1;
     if (c.playerType != pType) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() vars.playerType=%d "
-            "if Player.RequestToSetParts then Player.RequestToSetParts() end end)",
-            c.playerType);
+        snprintf(buf, sizeof(buf), "pcall(function() vars.playerType=%d end)", c.playerType);
         RunCode(buf); pType = c.playerType;
     }
 
     static int pParts = -1;
     if (c.playerParts != pParts) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() vars.playerParts=%d "
-            "if Player.RequestToSetParts then Player.RequestToSetParts() end end)",
-            c.playerParts);
+        snprintf(buf, sizeof(buf), "pcall(function() vars.playerPartsType=%d end)", c.playerParts);
         RunCode(buf); pParts = c.playerParts;
     }
 
     static int pCamo = -1;
     if (c.playerCamo != pCamo) {
-        snprintf(buf, sizeof(buf), "pcall(function() vars.playerCamo=%d end)", c.playerCamo);
+        snprintf(buf, sizeof(buf), "pcall(function() vars.playerCamoType=%d end)", c.playerCamo);
         RunCode(buf); pCamo = c.playerCamo;
     }
 
@@ -447,12 +508,15 @@ void Tick() {
         RunCode(buf); pNoGameOver = c.disableGameOver;
     }
 
+    // Verified mechanism: disabling reflex-mode is done via the player action
+    // flag (PlayerDisableAction.REFLEXMODE), the same way mission scripts do
+    // it. Reassert on the slow timer because missions reset the flag.
     static bool pNoReflex = false;
-    if (c.noReflex != pNoReflex) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.mis_noReflexMode=%s end end)",
-            c.noReflex ? "true" : "false");
-        RunCode(buf); pNoReflex = c.noReflex;
+    if (c.noReflex != pNoReflex || (c.noReflex && slow)) {
+        RunCode(c.noReflex
+            ? "pcall(function() vars.playerDisableActionFlag = PlayerDisableAction.REFLEXMODE end)"
+            : "pcall(function() vars.playerDisableActionFlag = PlayerDisableAction.NONE end)");
+        pNoReflex = c.noReflex;
     }
 
     static bool pNoMark = false;
