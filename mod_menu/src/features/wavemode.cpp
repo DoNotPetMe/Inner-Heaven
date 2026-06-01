@@ -204,13 +204,10 @@ void Start() {
     GameLua::RunCode("IHWave.Clear()");
 
     if (c.waveForceWeather && s_Arenas[c.waveArena % kArenaCount].weather > 0) {
-        static const char* wx[] = {
-            "", "SUNNY", "CLOUDY", "RAINY", "SANDSTORM", "FOGGY", "POURING",
-        };
         char wbuf[128];
         snprintf(wbuf, sizeof(wbuf),
-                 "TppWeather.SetCurrentWeather(TppDefine.WEATHER.%s)",
-                 wx[s_Arenas[c.waveArena % kArenaCount].weather]);
+                 "pcall(function() TppWeather.ForceRequestWeather(%d,2.0) end)",
+                 s_Arenas[c.waveArena % kArenaCount].weather);
         GameLua::RunCode(wbuf);
     }
 
