@@ -1,5 +1,6 @@
 #include "menu_system.h"
 #include "../core/input.h"
+#include "../config.h"
 #include <imgui.h>
 #include <cstdio>
 #include <algorithm>

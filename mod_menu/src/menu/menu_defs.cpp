@@ -1126,7 +1126,7 @@ static MenuNode BuildPresetsMenu(Config& c) {
         }),
         MakeSep(),
         MakeCmd("Reset All", "Reset all settings to default values", []() {
-            Config::Get() = Config();
+            Config::Get().Reset();
         }),
     });
 }

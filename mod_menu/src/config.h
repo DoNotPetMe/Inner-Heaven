@@ -559,6 +559,9 @@ struct Config {
     bool luaConsoleOpen     = false;
     bool showHelp           = true;
 
+    // Restore every setting to its default value.
+    void Reset() { *this = Config{}; }
+
 private:
     Config() = default;
 };

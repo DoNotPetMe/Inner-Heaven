@@ -3,6 +3,7 @@
 #include "menu_defs.h"
 #include "../features/lua_console.h"
 #include "../config.h"
+#include <imgui.h>
 
 namespace Menu {
 
