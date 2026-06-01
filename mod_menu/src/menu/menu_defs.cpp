@@ -4,6 +4,7 @@
 #include "../features/world.h"
 #include "../features/misc.h"
 #include "../features/lua_console.h"
+#include "../features/game_lua.h"
 #include "../features/wavemode.h"
 
 // ── Enum name tables ───────────────────────────────────────────────────────
