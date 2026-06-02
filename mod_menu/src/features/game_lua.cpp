@@ -846,15 +846,14 @@ void Tick() {
 // its output in a Lua global (IH_PROBE_RESULT); the next Tick picks it up and
 // prints it to the Lua Console.
 
-// NOTE: deliberately avoids string.format (Fox Engine's Lua build may not
-// support %s width specifiers), uses only '..' concatenation, and ALWAYS sets
-// IH_PROBE_RESULT — even if the body errors, the outer pcall's handler flushes
-// whatever was collected plus the error message. Otherwise a silent error
-// leaves the poller waiting until timeout (the bug we just hit).
+// NOTE: builds IH_PROBE_RESULT INCREMENTALLY (string append on every line) so
+// the instant the chunk runs at all, there is a non-empty result to harvest —
+// even if a later line errors. No string.format (Fox Engine Lua may lack %s
+// width), no table.concat in the critical path. If we still time out after
+// this, the chunk literally never ran (compile/queue problem), not a Lua bug.
 static const char* kProbeLua = R"LUA(
-IH_PROBE_RESULT = nil
-local out = {}
-local function add(s) out[#out+1] = tostring(s) end
+IH_PROBE_RESULT = '=== PROBE START ===\n'
+local function add(s) IH_PROBE_RESULT = IH_PROBE_RESULT .. tostring(s) .. '\n' end
 local function pad(s, n) s = tostring(s); while #s < n do s = s .. ' ' end; return s end
 
 local ok, err = pcall(function()
@@ -962,7 +961,6 @@ end)
 
 if not ok then add('FATAL ERROR: ' .. tostring(err)) end
 add('=== probe complete ===')
-IH_PROBE_RESULT = table.concat(out, '\n')
 )LUA";
 
 static ULONGLONG s_ProbeStartTime = 0;
@@ -974,6 +972,9 @@ void ProbeFields() {
         return;
     }
     LuaConsole::PrintLine("[probe] Running on game thread... results appear shortly.", 1);
+    // Pre-marker: if the big chunk below fails to COMPILE, this leaves a
+    // detectable result so we know the queue/harvest pipeline itself works.
+    RunCode("IH_PROBE_RESULT = '=== pipeline OK but main probe chunk failed to COMPILE ===\\n'");
     RunCode(kProbeLua);
     s_ProbePending = true;
     s_ProbeStartTime = GetTickCount64();
