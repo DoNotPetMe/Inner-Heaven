@@ -73,6 +73,12 @@ static void RunChunkRaw(lua_State* L, const char* code) {
     }
 }
 
+// Probe result buffer — written on game thread, read on render thread, guarded
+// by s_queueLock. This avoids ANY synchronous Lua calls from the render thread.
+static bool        s_ProbePending     = false;
+static std::string s_ProbeResultBuf;
+static bool        s_ProbeResultReady = false;
+
 static void DrainQueue(lua_State* L) {
     for (;;) {
         std::string code;
@@ -82,6 +88,30 @@ static void DrainQueue(lua_State* L) {
         s_queue.pop_front();
         LeaveCriticalSection(&s_queueLock);
         RunChunkRaw(L, code.c_str());
+    }
+
+    // After draining, check if the probe left a result. This runs on the GAME
+    // THREAD so it's safe to read Lua here.
+    if (s_ProbePending && !s_ProbeResultReady && L && s_loadbuffer && s_tolstring && s_settop) {
+        const char* check = "return IH_PROBE_RESULT or ''";
+        if (s_loadbuffer(L, check, strlen(check), "IH") == 0) {
+            if (o_pcall(L, 0, 1, 0) == 0) {
+                const char* s = s_tolstring(L, -1, nullptr);
+                if (s && s[0]) {
+                    EnterCriticalSection(&s_queueLock);
+                    s_ProbeResultBuf = s;
+                    s_ProbeResultReady = true;
+                    LeaveCriticalSection(&s_queueLock);
+                    // Clear the global
+                    RunChunkRaw(L, "IH_PROBE_RESULT = nil");
+                }
+                s_settop(L, -2);
+            } else {
+                if (s_settop) s_settop(L, -2);
+            }
+        } else {
+            if (s_settop) s_settop(L, -2);
+        }
     }
 }
 
@@ -815,7 +845,6 @@ void Tick() {
 // avoid the freeze caused by 40+ synchronous render-thread Lua calls. It stores
 // its output in a Lua global (IH_PROBE_RESULT); the next Tick picks it up and
 // prints it to the Lua Console.
-static bool s_ProbePending = false;
 
 static const char* kProbeLua = R"LUA(
 local out = {}
@@ -946,27 +975,31 @@ void ProbeFields() {
     s_ProbeStartTime = GetTickCount64();
 }
 
-// Called from Tick() — checks whether the probe completed and prints results.
-// Throttled to one poll per ~500ms. Times out after 10 seconds.
-static ULONGLONG s_ProbePollTime = 0;
+// Called from Tick() (render thread). Reads the C++ buffer that DrainQueue
+// (game thread) filled — NO Lua calls from the render thread, zero race risk.
 static void PollProbeResult() {
     if (!s_ProbePending) return;
-    ULONGLONG now = GetTickCount64();
-    if (now - s_ProbePollTime < 500) return;
-    s_ProbePollTime = now;
 
-    // Timeout: if we've been waiting too long, report the failure.
+    // Check timeout.
+    ULONGLONG now = GetTickCount64();
     if (now - s_ProbeStartTime > 10000) {
         s_ProbePending = false;
-        LuaConsole::PrintLine("[probe] Timed out - the Lua chunk may have errored silently.", 2);
-        LuaConsole::PrintLine("[probe] Try running in the Lua Console: type(vars)", 2);
+        LuaConsole::PrintLine("[probe] Timed out - the Lua chunk may have errored.", 2);
+        LuaConsole::PrintLine("[probe] Try the Lua Console manually: type(vars)", 2);
         return;
     }
 
-    std::string r = RunCodeStr("return IH_PROBE_RESULT or ''", "");
+    // Check if the game thread harvested a result.
+    std::string r;
+    EnterCriticalSection(&s_queueLock);
+    if (s_ProbeResultReady) {
+        r = std::move(s_ProbeResultBuf);
+        s_ProbeResultReady = false;
+    }
+    LeaveCriticalSection(&s_queueLock);
     if (r.empty()) return;     // not ready yet
+
     s_ProbePending = false;
-    RunCode("IH_PROBE_RESULT = nil");
 
     // Split on newlines and print each line to the console.
     size_t pos = 0;
