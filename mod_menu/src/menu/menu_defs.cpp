@@ -1175,6 +1175,9 @@ static MenuNode BuildDebugMenu(Config& c) {
         MakeCmd("Run Lua Diagnostics", "Probe which Lua namespaces (vars/gvars/Player/etc) exist (results appear in-game announce log)", []() {
             Features::GameLua::RunDiagnostics();
         }),
+        MakeCmd("Probe Dead Toggles", "Test candidate field/function names for the non-working toggles AND dump the real matching keys (results in the Lua Console)", []() {
+            Features::GameLua::ProbeFields();
+        }),
     });
 }
 

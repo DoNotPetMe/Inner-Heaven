@@ -37,12 +37,14 @@ void Init() {
 // bridge isn't ready or the read failed.
 bool ReadPlayerPos(float out[4]) {
     if (!GameLua::IsReady()) return false;
-    float x = GameLua::RunCodeFloat("return vars and vars.playerPosX or 0", 3.40282e38f);
-    if (x == 3.40282e38f) return false;          // sentinel: read failed
-    out[0] = x;
-    out[1] = GameLua::RunCodeFloat("return vars and vars.playerPosY or 0", 0.0f);
-    out[2] = GameLua::RunCodeFloat("return vars and vars.playerPosZ or 0", 0.0f);
-    out[3] = GameLua::RunCodeFloat("return vars and vars.playerRotY or 0", 0.0f);
+    // Gate on availability first: outside a mission `vars` is nil and a naive
+    // read would yield (0,0,0) and warp us to the world origin.
+    if (GameLua::RunCodeInt("return (vars and vars.playerPosX ~= nil) and 1 or 0", 0) != 1)
+        return false;
+    out[0] = GameLua::RunCodeFloat("return vars.playerPosX", 0.0f);
+    out[1] = GameLua::RunCodeFloat("return vars.playerPosY", 0.0f);
+    out[2] = GameLua::RunCodeFloat("return vars.playerPosZ", 0.0f);
+    out[3] = GameLua::RunCodeFloat("return vars.playerRotY or 0", 0.0f);
     return true;
 }
 

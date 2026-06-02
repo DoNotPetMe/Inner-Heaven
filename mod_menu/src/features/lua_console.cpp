@@ -27,6 +27,14 @@ static ImVec4 COL_SYS = ImVec4(0.50f, 0.70f, 0.50f, 1.0f);
 
 static void Log(const std::string& t, ImVec4 c) { s_Log.push_back({t,c}); s_Scroll = true; }
 
+void PrintLine(const char* text, int kind) {
+    ImVec4 c = (kind == 1) ? COL_SYS : (kind == 2) ? COL_ERR
+             : (kind == 3) ? ImVec4(0.55f, 0.90f, 0.55f, 1.0f) : COL_OUT;
+    Log(text ? text : "", c);
+}
+
+void Open() { Config::Get().luaConsoleOpen = true; }
+
 void Init() {
     if (Features::GameLua::IsReady())
         Log("Lua bridge CONNECTED (runs on game thread).", COL_SYS);

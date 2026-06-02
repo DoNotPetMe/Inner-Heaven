@@ -1,4 +1,5 @@
 #include "game_lua.h"
+#include "lua_console.h"
 #include "../config.h"
 #include "../memory/memory.h"
 #include "../memory/pattern.h"
@@ -167,6 +168,17 @@ float RunCodeFloat(const char* luaCode, float fallback) {
     if (o_pcall(s_L, 0, 1, 0) != 0)     { if (s_settop) s_settop(s_L, -2); return fallback; }
     float result = fallback;
     if (s_tolstring) { const char* s = s_tolstring(s_L, -1, nullptr); if (s) result = (float)atof(s); }
+    if (s_settop) s_settop(s_L, -2);
+    return result;
+}
+
+std::string RunCodeStr(const char* luaCode, const char* fallback) {
+    std::string fb = fallback ? fallback : "";
+    if (!s_L || !s_loadbuffer || !o_pcall) return fb;
+    if (s_loadbuffer(s_L, luaCode, strlen(luaCode), "IH") != 0) { if (s_settop) s_settop(s_L, -2); return fb; }
+    if (o_pcall(s_L, 0, 1, 0) != 0)     { if (s_settop) s_settop(s_L, -2); return fb; }
+    std::string result = fb;
+    if (s_tolstring) { const char* s = s_tolstring(s_L, -1, nullptr); if (s) result = s; }  // copy before pop
     if (s_settop) s_settop(s_L, -2);
     return result;
 }
@@ -793,6 +805,102 @@ void Tick() {
         }
         pNV = c.nightVision;
     }
+}
+
+// ── Field / function probe ──────────────────────────────────────────────────
+// For every feature that currently does nothing, we test a handful of candidate
+// field/function names: the game tells us which (if any) actually exist on this
+// build. Then we dump the REAL string keys of vars/gvars/mvars that match the
+// relevant keywords, so even if all candidates miss we learn the true name.
+// Output goes to the Lua Console (scrollable), not the transient announce log.
+void ProbeFields() {
+    LuaConsole::Open();
+    if (!IsReady()) {
+        LuaConsole::PrintLine("[probe] Lua bridge not connected - load into a save first.", 2);
+        return;
+    }
+    LuaConsole::PrintLine("=== FIELD/FUNCTION PROBE  (FOUND = exists on this build) ===", 1);
+
+    struct P { char kind; const char* ns; const char* name; const char* feature; };
+    static const P probes[] = {
+        // kind 'f' = table field (exists if ~= nil); 'F' = function
+        {'f',"vars","ply_noiseLevelRate",  "Noise scale"},
+        {'f',"vars","playerNoiseRate",     "Noise scale"},
+        {'f',"vars","ply_isNoWeaponNoise", "Silent weapons"},
+        {'f',"gvars","heroSubtractDisable","Don't subtract Hero"},
+        {'f',"gvars","ogreAddDisable",     "Don't add Demon"},
+        {'f',"gvars","soldierSightDistRate","Enemy sight"},
+        {'F',"TppSoldier2","SetSightParam","Enemy sight fn"},
+        {'f',"gvars","soldierHearingRate", "Enemy hearing"},
+        {'F',"TppSoldier2","SetHearingParam","Enemy hearing fn"},
+        {'F',"TppRevenge","SetOspreyCombatGimmickCount","Enemy prep fn"},
+        {'F',"TppRevenge","SetCombatGimmick","Enemy prep fn alt"},
+        {'f',"gvars","ene_disableRadioCall","Disable radio"},
+        {'f',"gvars","ene_noAlertPropagation","No alert prop"},
+        {'f',"mvars","mis_isDisableGameOver","Disable game over"},
+        {'f',"gvars","mis_noMarking",      "No marking"},
+        {'f',"mvars","mis_isSubsistence",  "Subsistence"},
+        {'F',"TppMission","SetPhase",      "Enemy phase fn"},
+        {'F',"TppMission","RegistDiscoveryGameOver","Discovery GO fn"},
+        {'f',"vars","quietWeaponId",       "Buddy: Quiet wpn"},
+        {'f',"vars","ddogEquipId",         "Buddy: DD equip"},
+        {'f',"vars","fultonCount",         "Fulton count"},
+        {'f',"gvars","ful_isEnableFultonAll","Fulton everything"},
+        {'f',"vars","demoIsUseSoldier",    "Cutscene soldier"},
+        {'f',"gvars","mb_isEnableOcelot",  "MB Ocelot"},
+        {'f',"gvars","mb_isEnableBuddies", "MB buddies"},
+        {'f',"vars","veh_isInvincible",    "Vehicle god"},
+        {'f',"vars","veh_ammoCount",       "Vehicle ammo"},
+        {'f',"gvars","skl_isEnableSkulls", "Skulls free-roam"},
+        {'f',"gvars","ene_isDisableAI",    "No enemy AI"},
+        {'F',"TppMotherBaseManagement","UnlockAllWeaponBlueprint","Unlock weapons fn"},
+        {'F',"TppMotherBaseManagement","UnlockAllItemBlueprint","Unlock items fn"},
+        {'F',"TppMission","UnlockAllMission","Unlock missions fn"},
+        {'F',"TppQuest","UnlockAllQuest",  "Unlock side ops fn"},
+        {'F',"TppQuest","ForceStartQuest", "Force quest fn"},
+        {'F',"TppUiCommand","PlayCassette","Cassette fn"},
+        {'F',"TppDemo","Skip",             "Skip cutscene fn"},
+        {'F',"GrTools","SetBrightness",    "Night vision fn"},
+        {'F',"TppClock","SetTimeScale",    "Clock scale fn"},
+        // teleport / marker getter candidates
+        {'F',"Tpp","GetMarkerPosition",    "Marker getter"},
+        {'F',"TppMarker2System","GetActiveMarkerPosition","Marker getter alt"},
+        {'F',"TppPlayer","Warp",           "Player warp fn"},
+    };
+
+    char expr[256], line[288];
+    for (const auto& p : probes) {
+        if (p.kind == 'F')
+            snprintf(expr, sizeof expr, "return (%s and type(%s.%s)=='function') and 1 or 0", p.ns, p.ns, p.name);
+        else
+            snprintf(expr, sizeof expr, "return (%s and (%s.%s ~= nil)) and 1 or 0", p.ns, p.ns, p.name);
+        int found = RunCodeInt(expr, -1);
+        snprintf(line, sizeof line, "%-18s %s.%s : %s",
+                 p.feature, p.ns, p.name,
+                 found == 1 ? "FOUND" : found == 0 ? "absent" : "(error)");
+        LuaConsole::PrintLine(line, found == 1 ? 3 : 0);
+    }
+
+    // Dump the real matching keys from each namespace.
+    LuaConsole::PrintLine("=== REAL KEYS (matching feature keywords) ===", 1);
+    static const char* kNamespaces[] = { "vars", "gvars", "mvars" };
+    for (const char* ns : kNamespaces) {
+        char buf[1024];
+        snprintf(buf, sizeof buf,
+            "local t=%s if type(t)~='table' then return '(not an iterable table)' end "
+            "local o={} for k,v in pairs(t) do if type(k)=='string' then local lk=string.lower(k) "
+            "for _,n in ipairs({'noise','hero','ogre','sight','hear','radio','alert','fulton',"
+            "'mark','subsist','skull','disableai','gameover','reflex','invinc','ammo','quiet',"
+            "'ddog','dhorse','dwalker','ocelot','puppy','buddy','phase','reinforce'}) do "
+            "if string.find(lk,n,1,true) then o[#o+1]=k break end end end end "
+            "table.sort(o) return table.concat(o,', ')", ns);
+        std::string keys = RunCodeStr(buf, "(probe error)");
+        // Print in wrapped chunks so a long list stays readable.
+        std::string header = std::string(ns) + ": ";
+        if (keys.empty()) keys = "(no matching keys)";
+        LuaConsole::PrintLine((header + keys).c_str(), 0);
+    }
+    LuaConsole::PrintLine("=== probe complete (paste these back to wire real names) ===", 1);
 }
 
 // ── Diagnostics ───────────────────────────────────────────────────────────────
