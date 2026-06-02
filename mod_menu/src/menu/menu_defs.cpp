@@ -355,7 +355,7 @@ static MenuNode BuildWorldMenu(Config& c) {
             MakeEnum  ("destructionLevel",      "Environment destruction level",                                       &c.destructionLevel, s_Destruction, 4),
         }),
         MakeSep(),
-        MakeCmd   ("Teleport to Waypoint",      "Instantly move player to the current map marker position",            Features::World::TeleportToWaypoint),
+        MakeCmd   ("Teleport to Marker",        "Warp to your saved marker (set it with Misc > Save Slot 1)",          Features::World::TeleportToWaypoint),
     });
 }
 
@@ -957,6 +957,8 @@ static MenuNode BuildProgressionMenu(Config& c) {
 
 static MenuNode BuildWaveSurvivalMenu(Config& c) {
     return MakeSub("Wave Survival", "Inner Heaven's stealth wave-survival gamemode - pick an arena and hold out", {
+        MakeCmd("Scout Location", "Ask the game if waves can spawn where you stand (reads live state; result shows in-game)",
+                Features::WaveMode::CheckLocation),
         MakeSub("Start Mission", "Choose an arena and deploy (always replayable)", {
             MakeCmd("Afghan Outpost",   "Sunny desert outpost - start a wave session here",
                     []() { Config::Get().waveArena = 0; Features::WaveMode::Start(); }),
@@ -1076,25 +1078,11 @@ static MenuNode BuildMiscMenu(Config& c) {
             MakeCmd   ("Save Slot 1",       "Save current position to slot 1",                                          Features::Misc::SavePosition),
             MakeCmd   ("Load Slot 1",       "Teleport to slot 1 saved position",                                        Features::Misc::LoadPosition),
             MakeSep(),
-            MakeCmd   ("Save Slot 2",       "Save current position to slot 2",                                          []() {
-                auto& c = Config::Get();
-                auto& m = Features::Misc::GetPlayerPos();
-                if (m) { c.savedPos2X = m[0]; c.savedPos2Y = m[1]; c.savedPos2Z = m[2]; c.hasSavedPos2 = true; }
-            }),
-            MakeCmd   ("Load Slot 2",       "Teleport to slot 2 saved position",                                        []() {
-                auto& c = Config::Get();
-                if (c.hasSavedPos2) { auto& m = Features::Misc::GetPlayerPos(); if(m) { m[0]=c.savedPos2X; m[1]=c.savedPos2Y; m[2]=c.savedPos2Z; } }
-            }),
+            MakeCmd   ("Save Slot 2",       "Save current position to slot 2",                                          []() { Features::Misc::SaveSlot(2); }),
+            MakeCmd   ("Load Slot 2",       "Teleport to slot 2 saved position",                                        []() { Features::Misc::TeleportSlot(2); }),
             MakeSep(),
-            MakeCmd   ("Save Slot 3",       "Save current position to slot 3",                                          []() {
-                auto& c = Config::Get();
-                auto& m = Features::Misc::GetPlayerPos();
-                if (m) { c.savedPos3X = m[0]; c.savedPos3Y = m[1]; c.savedPos3Z = m[2]; c.hasSavedPos3 = true; }
-            }),
-            MakeCmd   ("Load Slot 3",       "Teleport to slot 3 saved position",                                        []() {
-                auto& c = Config::Get();
-                if (c.hasSavedPos3) { auto& m = Features::Misc::GetPlayerPos(); if(m) { m[0]=c.savedPos3X; m[1]=c.savedPos3Y; m[2]=c.savedPos3Z; } }
-            }),
+            MakeCmd   ("Save Slot 3",       "Save current position to slot 3",                                          []() { Features::Misc::SaveSlot(3); }),
+            MakeCmd   ("Load Slot 3",       "Teleport to slot 3 saved position",                                        []() { Features::Misc::TeleportSlot(3); }),
         }),
         MakeSep(),
         MakeCmd   ("Open Lua Console",  "Open the Fox Engine Lua 5.1 interactive console",                             []() { Config::Get().luaConsoleOpen = !Config::Get().luaConsoleOpen; }),

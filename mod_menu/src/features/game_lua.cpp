@@ -160,6 +160,17 @@ int RunCodeInt(const char* luaCode, int fallback) {
     return result;
 }
 
+// Same as RunCodeInt but preserves fractional precision (for world coordinates).
+float RunCodeFloat(const char* luaCode, float fallback) {
+    if (!s_L || !s_loadbuffer || !o_pcall) return fallback;
+    if (s_loadbuffer(s_L, luaCode, strlen(luaCode), "IH") != 0) { if (s_settop) s_settop(s_L, -2); return fallback; }
+    if (o_pcall(s_L, 0, 1, 0) != 0)     { if (s_settop) s_settop(s_L, -2); return fallback; }
+    float result = fallback;
+    if (s_tolstring) { const char* s = s_tolstring(s_L, -1, nullptr); if (s) result = (float)atof(s); }
+    if (s_settop) s_settop(s_L, -2);
+    return result;
+}
+
 int GetScanFound() { return s_ScanFound; }
 int GetScanTotal() { return s_ScanTotal; }
 

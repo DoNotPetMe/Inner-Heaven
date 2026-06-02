@@ -229,19 +229,46 @@ void Init() {
     }
 }
 
+// Verified runtime probe: does the player's current area have an authored
+// reinforcement block + command post? That is the ONLY location where the
+// engine can actually spawn a wave (see the note above kWaveLua). The menu/HUD
+// uses this so the game "recognises where we are" and tells you whether this
+// spot can host a wave before you start.
+bool CanSpawnHere() {
+    if (!GameLua::IsReady()) return false;
+    return GameLua::RunCodeInt(
+        "return (mvars and mvars.reinforce_hasReinforceBlock) and 1 or 0", 0) != 0;
+}
+
+// "Scout" the current spot and report, in the in-game log, whether the engine
+// can host a wave here (i.e. there is a reinforcement block / command post). This
+// is the location-awareness the gamemode needs: it reads the live game state
+// rather than guessing.
+void CheckLocation() {
+    if (!GameLua::IsReady()) return;
+    GameLua::RunCode(
+        "pcall(function() "
+        "local ok = mvars and mvars.reinforce_hasReinforceBlock "
+        "if TppUiCommand and TppUiCommand.AnnounceLogView then "
+        "TppUiCommand.AnnounceLogView(ok and "
+        "'WAVE: this area supports reinforcements - deploy here' or "
+        "'WAVE: no reinforcement block here - move to an outpost/base') end end)");
+}
+
 void Start() {
     auto& c = Config::Get();
     c.waveModeActiveFailed = false;
 
-    auto pos = Features::Misc::GetPlayerPos();
-    if (!pos) {
+    // Anchor the arena at the live player position (verified Lua read).
+    float p[4];
+    if (!Features::Misc::ReadPlayerPos(p)) {
         // Can't anchor an arena without knowing where the player is.
         c.waveModeActiveFailed = true;
         return;
     }
-    s_CenterX = pos[0];
-    s_CenterY = pos[1];
-    s_CenterZ = pos[2];
+    s_CenterX = p[0];
+    s_CenterY = p[1];
+    s_CenterZ = p[2];
 
     if (!s_HelperInjected && GameLua::IsReady()) {
         GameLua::RunCode(kWaveLua);

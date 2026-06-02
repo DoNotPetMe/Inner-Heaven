@@ -27,6 +27,14 @@ void RenderHud();   // draws the counter / status overlay (call once per frame)
 void Start();       // begin a session using the current Config wave settings
 void Stop();        // tear down the active session and clear spawned enemies
 
+// Verified probe: true if the player's CURRENT area has a reinforcement block
+// (i.e. the engine can actually spawn a wave here). The menu shows this so you
+// know whether to start a session where you're standing.
+bool CanSpawnHere();
+
+// Announce in-game whether the current spot can host a wave (location scouting).
+void CheckLocation();
+
 bool IsRunning();
 int  CurrentWave();
 int  EnemiesRemaining();

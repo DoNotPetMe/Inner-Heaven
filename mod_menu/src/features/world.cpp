@@ -2,13 +2,12 @@
 #include "../config.h"
 #include "../memory/memory.h"
 #include "../memory/pattern.h"
+#include "misc.h"
 
 namespace Features::World {
 
 static uintptr_t s_TimeScaleAddr = 0;
 static uintptr_t s_TimeOfDayAddr = 0;
-static uintptr_t s_PlayerPosAddr = 0;
-static uintptr_t s_WaypointAddr  = 0;
 static float     s_OrigTimeScale = 1.0f;
 
 static Memory::PatchEntry s_AIDisable;
@@ -24,12 +23,6 @@ void Init() {
     uintptr_t tod = Pattern::Scan("F3 0F 11 ?? ?? ?? ?? ?? 0F 2F ?? ?? ?? ?? ?? 72 ?? F3 0F 10", base, size);
     if (tod) s_TimeOfDayAddr = tod;
 
-    uintptr_t pos = Pattern::Scan("F3 0F 11 ?? ?? ?? ?? ?? F3 0F 11 ?? ?? ?? ?? ?? F3 0F 11 ?? ?? ?? ?? ?? 48 8B ?? ?? E8", base, size);
-    if (pos) s_PlayerPosAddr = pos;
-
-    uintptr_t wp = Pattern::Scan("F3 0F 10 ?? ?? ?? ?? ?? F3 0F 10 ?? ?? ?? ?? ?? F3 0F 10 ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0", base, size);
-    if (wp) s_WaypointAddr = wp;
-
     uintptr_t ai = Pattern::Scan("E8 ?? ?? ?? ?? 48 8B ?? ?? 48 85 C9 74 ?? E8 ?? ?? ?? ?? 84 C0 74", base, size);
     if (ai) { s_AIDisable.address = ai; s_AIDisable.patched = { 0x90, 0x90, 0x90, 0x90, 0x90 }; }
 
@@ -38,15 +31,17 @@ void Init() {
 }
 
 int GetScanFound() {
-    return (s_TimeScaleAddr?1:0) + (s_TimeOfDayAddr?1:0) + (s_PlayerPosAddr?1:0)
-         + (s_WaypointAddr?1:0) + (s_AIDisable.address?1:0) + (s_FultonPatch.address?1:0);
+    return (s_TimeScaleAddr?1:0) + (s_TimeOfDayAddr?1:0)
+         + (s_AIDisable.address?1:0) + (s_FultonPatch.address?1:0);
 }
-int GetScanTotal() { return 6; }
+int GetScanTotal() { return 4; }
 
+// Teleport to your saved marker (position slot 1). This goes through the
+// verified Lua Warp (Misc::TeleportSlot) instead of the old AOB position-write,
+// which never resolved on current builds. "Save Slot 1" in the Misc menu drops
+// the marker; this warps you back to it.
 void TeleportToWaypoint() {
-    if (!s_PlayerPosAddr || !s_WaypointAddr) return;
-    for (int i = 0; i < 3; ++i)
-        Memory::Write<float>(s_PlayerPosAddr + i * 4, Memory::Read<float>(s_WaypointAddr + i * 4));
+    Features::Misc::TeleportSlot(1);
 }
 
 void Tick() {

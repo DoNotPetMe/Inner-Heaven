@@ -47,7 +47,29 @@ but several patterns are short/generic (e.g. Rapid Fire keys off `0F 2F`, a
 per build — or just use the Lua equivalents now that the bridge works (e.g. Lua
 god mode instead of the HP-write patch).
 
+### Teleport — REWORKED onto the verified Lua bridge
+
+The old teleport wrote to an AOB-scanned "player position" address that never
+resolved on current builds, so it did nothing. It now goes through the connected
+Lua bridge using functions verified against the deminified game scripts:
+
+- read position: `vars.playerPosX / playerPosY / playerPosZ`, `vars.playerRotY`
+- warp: `TppPlayer.Warp{pos={x,y,z}, rotY=deg}` (→ `GameObject.SendCommand(
+  {type="TppPlayer2",index=..},{id="WarpAndWaitBlock",pos=..,rotY=..})`)
+
+**Misc → Save Slot 1-3 / Load Slot 1-3** now actually save and warp. **World →
+Teleport to Marker** warps to your saved Slot 1 (your "marker"). Note: reading
+the *iDroid map marker* position itself has no clean public Lua getter that
+could be verified from open sources, so the working "marker" is the slot you
+save — set it where you want, warp back to it any time.
+
 ### Wave Survival — engine-constrained
+
+Wave Mode now reads live state to know where you are: **Scout Location** asks the
+game whether the current area has a reinforcement block (`mvars.
+reinforce_hasReinforceBlock`) and reports the answer in the in-game log, and
+Start anchors the arena from the verified Lua player position. The spawn step is
+still the engine seam below.
 
 Confirmed from IH's source: **MGSV has no runtime "spawn a soldier at XYZ"
 primitive** — not in the game, not in IH, not exposed by IHHook. Enemy presence
