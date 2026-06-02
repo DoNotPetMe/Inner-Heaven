@@ -186,6 +186,8 @@ std::string RunCodeStr(const char* luaCode, const char* fallback) {
 int GetScanFound() { return s_ScanFound; }
 int GetScanTotal() { return s_ScanTotal; }
 
+static void PollProbeResult();   // defined after Tick
+
 // ── Tick helpers ──────────────────────────────────────────────────────────────
 
 // ══════════════════════════════════════════════════════════════════════════════
