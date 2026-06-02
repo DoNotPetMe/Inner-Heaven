@@ -196,6 +196,7 @@ int GetScanTotal() { return s_ScanTotal; }
 
 void Tick() {
     if (!IsReady()) return;
+    PollProbeResult();
     auto& c = Config::Get();
     ULONGLONG now = GetTickCount64();
     char buf[384];
@@ -808,99 +809,162 @@ void Tick() {
 }
 
 // ── Field / function probe ──────────────────────────────────────────────────
-// For every feature that currently does nothing, we test a handful of candidate
-// field/function names: the game tells us which (if any) actually exist on this
-// build. Then we dump the REAL string keys of vars/gvars/mvars that match the
-// relevant keywords, so even if all candidates miss we learn the true name.
-// Output goes to the Lua Console (scrollable), not the transient announce log.
+// The entire probe runs as ONE Lua chunk on the GAME THREAD (via RunCode) to
+// avoid the freeze caused by 40+ synchronous render-thread Lua calls. It stores
+// its output in a Lua global (IH_PROBE_RESULT); the next Tick picks it up and
+// prints it to the Lua Console.
+static bool s_ProbePending = false;
+
+static const char* kProbeLua = R"LUA(
+pcall(function()
+  local out = {}
+  local function add(s) out[#out+1] = s end
+  local function test(label, ns_name, field, is_func)
+    local ns = _G[ns_name]
+    local found = false
+    if ns then
+      if is_func then
+        found = type(ns[field]) == 'function'
+      else
+        found = ns[field] ~= nil
+      end
+    end
+    add(string.format('%-18s %s.%s : %s', label, ns_name, field, found and 'FOUND' or 'absent'))
+  end
+
+  add('=== FIELD/FUNCTION PROBE  (FOUND = exists on this build) ===')
+
+  -- Field candidates (f) and function candidates (F)
+  test('Noise scale',       'vars',  'ply_noiseLevelRate', false)
+  test('Noise scale',       'vars',  'playerNoiseRate',    false)
+  test('Silent weapons',    'vars',  'ply_isNoWeaponNoise',false)
+  test("Don't sub Hero",    'gvars', 'heroSubtractDisable',false)
+  test("Don't add Demon",   'gvars', 'ogreAddDisable',     false)
+  test('Enemy sight',       'gvars', 'soldierSightDistRate',false)
+  test('Enemy sight fn',    'TppSoldier2','SetSightParam',  true)
+  test('Enemy hearing',     'gvars', 'soldierHearingRate',  false)
+  test('Enemy hearing fn',  'TppSoldier2','SetHearingParam', true)
+  test('Enemy prep fn',     'TppRevenge','SetOspreyCombatGimmickCount', true)
+  test('Enemy prep fn alt', 'TppRevenge','SetCombatGimmick', true)
+  test('Disable radio',     'gvars', 'ene_disableRadioCall',false)
+  test('No alert prop',     'gvars', 'ene_noAlertPropagation',false)
+  test('Disable game over', 'mvars', 'mis_isDisableGameOver',false)
+  test('No marking',        'gvars', 'mis_noMarking',       false)
+  test('Subsistence',       'mvars', 'mis_isSubsistence',   false)
+  test('Enemy phase fn',    'TppMission','SetPhase',         true)
+  test('Discovery GO fn',   'TppMission','RegistDiscoveryGameOver', true)
+  test('Buddy: Quiet wpn',  'vars',  'quietWeaponId',       false)
+  test('Buddy: DD equip',   'vars',  'ddogEquipId',         false)
+  test('Fulton count',      'vars',  'fultonCount',         false)
+  test('Fulton everything', 'gvars', 'ful_isEnableFultonAll',false)
+  test('Cutscene soldier',  'vars',  'demoIsUseSoldier',    false)
+  test('MB Ocelot',         'gvars', 'mb_isEnableOcelot',   false)
+  test('MB buddies',        'gvars', 'mb_isEnableBuddies',  false)
+  test('Vehicle god',       'vars',  'veh_isInvincible',    false)
+  test('Vehicle ammo',      'vars',  'veh_ammoCount',       false)
+  test('Skulls free-roam',  'gvars', 'skl_isEnableSkulls',  false)
+  test('No enemy AI',       'gvars', 'ene_isDisableAI',     false)
+  test('Unlock weapons fn', 'TppMotherBaseManagement','UnlockAllWeaponBlueprint', true)
+  test('Unlock items fn',   'TppMotherBaseManagement','UnlockAllItemBlueprint', true)
+  test('Unlock missions fn','TppMission','UnlockAllMission', true)
+  test('Unlock sideops fn', 'TppQuest','UnlockAllQuest',    true)
+  test('Force quest fn',    'TppQuest','ForceStartQuest',   true)
+  test('Cassette fn',       'TppUiCommand','PlayCassette',  true)
+  test('Skip cutscene fn',  'TppDemo','Skip',               true)
+  test('Night vision fn',   'GrTools','SetBrightness',      true)
+  test('Clock scale fn',    'TppClock','SetTimeScale',      true)
+  test('Marker getter',     'Tpp','GetMarkerPosition',      true)
+  test('Marker getter alt', 'TppMarker2System','GetActiveMarkerPosition', true)
+  test('Player warp fn',    'TppPlayer','Warp',             true)
+
+  -- Dump real keys from vars/gvars/mvars matching feature keywords
+  add('')
+  add('=== REAL KEYS (matching feature keywords) ===')
+  local keywords = {'noise','hero','ogre','sight','hear','radio','alert','fulton',
+    'mark','subsist','skull','disable','gameover','reflex','invinc','ammo','quiet',
+    'ddog','dhorse','dwalker','ocelot','puppy','buddy','phase','reinforce','weapon',
+    'suppress','stealth','speed','damage','recruit','staff','player'}
+  for _,ns_name in ipairs({'vars','gvars','mvars'}) do
+    local t = _G[ns_name]
+    if type(t) ~= 'table' then
+      add(ns_name .. ': (not an iterable table - type=' .. type(t or 'nil') .. ')')
+    else
+      local found = {}
+      for k,v in pairs(t) do
+        if type(k) == 'string' then
+          local lk = string.lower(k)
+          for _,n in ipairs(keywords) do
+            if string.find(lk, n, 1, true) then
+              found[#found+1] = k .. '=' .. tostring(v)
+              break
+            end
+          end
+        end
+      end
+      table.sort(found)
+      if #found == 0 then
+        add(ns_name .. ': (no matching string keys)')
+      else
+        add(ns_name .. ':')
+        for _,entry in ipairs(found) do
+          add('  ' .. entry)
+        end
+      end
+    end
+  end
+
+  add('')
+  add('=== NAMESPACE TYPES ===')
+  for _,n in ipairs({'vars','gvars','mvars','TppSoldier2','TppRevenge','TppMission',
+    'TppQuest','TppDemo','GrTools','TppClock','TppPlayer','TppUiCommand',
+    'TppMotherBaseManagement','TppMarker2System','Tpp','Player','PlayerInfo',
+    'GameObject','HighSpeedCamera','TppHelicopter','TppWeather',
+    'TppReinforceBlock','TppCommandPost2','TppEnemyManager'}) do
+    local v = _G[n]
+    add(string.format('  %-30s %s', n, v and type(v) or 'nil'))
+  end
+
+  add('')
+  add('=== probe complete ===')
+  IH_PROBE_RESULT = table.concat(out, '\n')
+end)
+)LUA";
+
 void ProbeFields() {
     LuaConsole::Open();
     if (!IsReady()) {
         LuaConsole::PrintLine("[probe] Lua bridge not connected - load into a save first.", 2);
         return;
     }
-    LuaConsole::PrintLine("=== FIELD/FUNCTION PROBE  (FOUND = exists on this build) ===", 1);
+    LuaConsole::PrintLine("[probe] Running on game thread... results appear shortly.", 1);
+    RunCode(kProbeLua);
+    s_ProbePending = true;
+}
 
-    struct P { char kind; const char* ns; const char* name; const char* feature; };
-    static const P probes[] = {
-        // kind 'f' = table field (exists if ~= nil); 'F' = function
-        {'f',"vars","ply_noiseLevelRate",  "Noise scale"},
-        {'f',"vars","playerNoiseRate",     "Noise scale"},
-        {'f',"vars","ply_isNoWeaponNoise", "Silent weapons"},
-        {'f',"gvars","heroSubtractDisable","Don't subtract Hero"},
-        {'f',"gvars","ogreAddDisable",     "Don't add Demon"},
-        {'f',"gvars","soldierSightDistRate","Enemy sight"},
-        {'F',"TppSoldier2","SetSightParam","Enemy sight fn"},
-        {'f',"gvars","soldierHearingRate", "Enemy hearing"},
-        {'F',"TppSoldier2","SetHearingParam","Enemy hearing fn"},
-        {'F',"TppRevenge","SetOspreyCombatGimmickCount","Enemy prep fn"},
-        {'F',"TppRevenge","SetCombatGimmick","Enemy prep fn alt"},
-        {'f',"gvars","ene_disableRadioCall","Disable radio"},
-        {'f',"gvars","ene_noAlertPropagation","No alert prop"},
-        {'f',"mvars","mis_isDisableGameOver","Disable game over"},
-        {'f',"gvars","mis_noMarking",      "No marking"},
-        {'f',"mvars","mis_isSubsistence",  "Subsistence"},
-        {'F',"TppMission","SetPhase",      "Enemy phase fn"},
-        {'F',"TppMission","RegistDiscoveryGameOver","Discovery GO fn"},
-        {'f',"vars","quietWeaponId",       "Buddy: Quiet wpn"},
-        {'f',"vars","ddogEquipId",         "Buddy: DD equip"},
-        {'f',"vars","fultonCount",         "Fulton count"},
-        {'f',"gvars","ful_isEnableFultonAll","Fulton everything"},
-        {'f',"vars","demoIsUseSoldier",    "Cutscene soldier"},
-        {'f',"gvars","mb_isEnableOcelot",  "MB Ocelot"},
-        {'f',"gvars","mb_isEnableBuddies", "MB buddies"},
-        {'f',"vars","veh_isInvincible",    "Vehicle god"},
-        {'f',"vars","veh_ammoCount",       "Vehicle ammo"},
-        {'f',"gvars","skl_isEnableSkulls", "Skulls free-roam"},
-        {'f',"gvars","ene_isDisableAI",    "No enemy AI"},
-        {'F',"TppMotherBaseManagement","UnlockAllWeaponBlueprint","Unlock weapons fn"},
-        {'F',"TppMotherBaseManagement","UnlockAllItemBlueprint","Unlock items fn"},
-        {'F',"TppMission","UnlockAllMission","Unlock missions fn"},
-        {'F',"TppQuest","UnlockAllQuest",  "Unlock side ops fn"},
-        {'F',"TppQuest","ForceStartQuest", "Force quest fn"},
-        {'F',"TppUiCommand","PlayCassette","Cassette fn"},
-        {'F',"TppDemo","Skip",             "Skip cutscene fn"},
-        {'F',"GrTools","SetBrightness",    "Night vision fn"},
-        {'F',"TppClock","SetTimeScale",    "Clock scale fn"},
-        // teleport / marker getter candidates
-        {'F',"Tpp","GetMarkerPosition",    "Marker getter"},
-        {'F',"TppMarker2System","GetActiveMarkerPosition","Marker getter alt"},
-        {'F',"TppPlayer","Warp",           "Player warp fn"},
-    };
+// Called from Tick() — checks whether the probe completed and prints results.
+// Throttled to one poll per ~500ms to avoid hammering the VM.
+static ULONGLONG s_ProbePollTime = 0;
+static void PollProbeResult() {
+    if (!s_ProbePending) return;
+    ULONGLONG now = GetTickCount64();
+    if (now - s_ProbePollTime < 500) return;
+    s_ProbePollTime = now;
+    std::string r = RunCodeStr("return IH_PROBE_RESULT or ''", "");
+    if (r.empty()) return;     // not ready yet
+    s_ProbePending = false;
+    RunCode("IH_PROBE_RESULT = nil");
 
-    char expr[256], line[288];
-    for (const auto& p : probes) {
-        if (p.kind == 'F')
-            snprintf(expr, sizeof expr, "return (%s and type(%s.%s)=='function') and 1 or 0", p.ns, p.ns, p.name);
-        else
-            snprintf(expr, sizeof expr, "return (%s and (%s.%s ~= nil)) and 1 or 0", p.ns, p.ns, p.name);
-        int found = RunCodeInt(expr, -1);
-        snprintf(line, sizeof line, "%-18s %s.%s : %s",
-                 p.feature, p.ns, p.name,
-                 found == 1 ? "FOUND" : found == 0 ? "absent" : "(error)");
-        LuaConsole::PrintLine(line, found == 1 ? 3 : 0);
+    // Split on newlines and print each line to the console.
+    size_t pos = 0;
+    while (pos < r.size()) {
+        size_t nl = r.find('\n', pos);
+        std::string line = (nl == std::string::npos) ? r.substr(pos) : r.substr(pos, nl - pos);
+        int kind = 0;
+        if (line.find("===") != std::string::npos)       kind = 1;
+        else if (line.find("FOUND") != std::string::npos) kind = 3;
+        LuaConsole::PrintLine(line.c_str(), kind);
+        pos = (nl == std::string::npos) ? r.size() : nl + 1;
     }
-
-    // Dump the real matching keys from each namespace.
-    LuaConsole::PrintLine("=== REAL KEYS (matching feature keywords) ===", 1);
-    static const char* kNamespaces[] = { "vars", "gvars", "mvars" };
-    for (const char* ns : kNamespaces) {
-        char buf[1024];
-        snprintf(buf, sizeof buf,
-            "local t=%s if type(t)~='table' then return '(not an iterable table)' end "
-            "local o={} for k,v in pairs(t) do if type(k)=='string' then local lk=string.lower(k) "
-            "for _,n in ipairs({'noise','hero','ogre','sight','hear','radio','alert','fulton',"
-            "'mark','subsist','skull','disableai','gameover','reflex','invinc','ammo','quiet',"
-            "'ddog','dhorse','dwalker','ocelot','puppy','buddy','phase','reinforce'}) do "
-            "if string.find(lk,n,1,true) then o[#o+1]=k break end end end end "
-            "table.sort(o) return table.concat(o,', ')", ns);
-        std::string keys = RunCodeStr(buf, "(probe error)");
-        // Print in wrapped chunks so a long list stays readable.
-        std::string header = std::string(ns) + ": ";
-        if (keys.empty()) keys = "(no matching keys)";
-        LuaConsole::PrintLine((header + keys).c_str(), 0);
-    }
-    LuaConsole::PrintLine("=== probe complete (paste these back to wire real names) ===", 1);
 }
 
 // ── Diagnostics ───────────────────────────────────────────────────────────────
