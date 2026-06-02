@@ -4,6 +4,12 @@ A singleplayer mod menu and DLL injector for **Metal Gear Solid V: The Phantom P
 
 Inspired by [Infinite Heaven](https://www.nexusmods.com/metalgearsolidvtpp/mods/45) by TinManTex — rebuilt from scratch with a unique feature set and our own implementation.
 
+> ⚠️ **Status:** The overlay renders, but in-game cheats do **not** work on
+> current game builds — the address signatures are unverified guesses, so the
+> Lua bridge doesn't connect and most patches miss. Read **[STATUS.md](STATUS.md)**
+> for the full diagnosis and the realistic path (Infinite Heaven). The feature
+> list below is the *intended* design, not what currently functions.
+
 > *"The world calls for wetwork, and we answer. No greater good. No just cause."*
 
 ## Menu System

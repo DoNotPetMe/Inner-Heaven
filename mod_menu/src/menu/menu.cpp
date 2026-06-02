@@ -35,7 +35,9 @@ static void RenderScanReport() {
     ImGui::TextColored(luaReady ? ok : bad, luaReady ? "CONNECTED" : "NOT CONNECTED");
     ImGui::TextWrapped("Lua bridge drives ~60 features (god mode, resources, weather, "
                        "appearance, enemy, mission, buddy, etc). If this is red, none of "
-                       "those work \xE2\x80\x94 check that you loaded into an actual mission/FOB.");
+                       "those work \xE2\x80\x94 the function signatures don't match your game "
+                       "build. See STATUS.md; for working singleplayer cheats use Infinite "
+                       "Heaven (IHHook), which keeps these addresses up to date.");
     ImGui::Text("  Lua scans: %d / %d",
                 Features::GameLua::GetScanFound(), Features::GameLua::GetScanTotal());
     ImGui::Separator();
