@@ -846,117 +846,121 @@ void Tick() {
 // its output in a Lua global (IH_PROBE_RESULT); the next Tick picks it up and
 // prints it to the Lua Console.
 
+// NOTE: deliberately avoids string.format (Fox Engine's Lua build may not
+// support %s width specifiers), uses only '..' concatenation, and ALWAYS sets
+// IH_PROBE_RESULT — even if the body errors, the outer pcall's handler flushes
+// whatever was collected plus the error message. Otherwise a silent error
+// leaves the poller waiting until timeout (the bug we just hit).
 static const char* kProbeLua = R"LUA(
+IH_PROBE_RESULT = nil
 local out = {}
-local function add(s) out[#out+1] = s end
+local function add(s) out[#out+1] = tostring(s) end
+local function pad(s, n) s = tostring(s); while #s < n do s = s .. ' ' end; return s end
 
--- Phase 1: test candidate field/function names. Each wrapped in its own pcall
--- so one failure can't kill the whole probe.
-add('=== FIELD/FUNCTION PROBE  (FOUND = exists on this build) ===')
+local ok, err = pcall(function()
+  add('=== FIELD/FUNCTION PROBE  (FOUND = exists on this build) ===')
 
-local function test(label, ns_name, field, is_func)
-  local ok2, res = pcall(function()
-    local ns = _G[ns_name]
-    if not ns then return 'absent (namespace nil)' end
-    if is_func then
-      return type(ns[field]) == 'function' and 'FOUND' or 'absent'
-    else
-      return ns[field] ~= nil and 'FOUND' or 'absent'
-    end
-  end)
-  local status = ok2 and res or ('ERROR: ' .. tostring(res))
-  add(string.format('%-18s %s.%s : %s', label, ns_name, field, status))
-end
+  local function test(label, ns_name, field, is_func)
+    local ok2, res = pcall(function()
+      local ns = _G[ns_name]
+      if not ns then return 'absent (namespace nil)' end
+      if is_func then return type(ns[field]) == 'function' and 'FOUND' or 'absent'
+      else return ns[field] ~= nil and 'FOUND' or 'absent' end
+    end)
+    local status = ok2 and res or ('ERROR: ' .. tostring(res))
+    add(pad(label, 18) .. ' ' .. ns_name .. '.' .. field .. ' : ' .. status)
+  end
 
-test('Noise scale',       'vars',  'ply_noiseLevelRate', false)
-test('Noise scale',       'vars',  'playerNoiseRate',    false)
-test('Silent weapons',    'vars',  'ply_isNoWeaponNoise',false)
-test("Don't sub Hero",    'gvars', 'heroSubtractDisable',false)
-test("Don't add Demon",   'gvars', 'ogreAddDisable',     false)
-test('Enemy sight',       'gvars', 'soldierSightDistRate',false)
-test('Enemy sight fn',    'TppSoldier2','SetSightParam',  true)
-test('Enemy hearing',     'gvars', 'soldierHearingRate',  false)
-test('Enemy hearing fn',  'TppSoldier2','SetHearingParam', true)
-test('Enemy prep fn',     'TppRevenge','SetOspreyCombatGimmickCount', true)
-test('Enemy prep fn alt', 'TppRevenge','SetCombatGimmick', true)
-test('Disable radio',     'gvars', 'ene_disableRadioCall',false)
-test('No alert prop',     'gvars', 'ene_noAlertPropagation',false)
-test('Disable game over', 'mvars', 'mis_isDisableGameOver',false)
-test('No marking',        'gvars', 'mis_noMarking',       false)
-test('Subsistence',       'mvars', 'mis_isSubsistence',   false)
-test('Enemy phase fn',    'TppMission','SetPhase',         true)
-test('Discovery GO fn',   'TppMission','RegistDiscoveryGameOver', true)
-test('Buddy: Quiet wpn',  'vars',  'quietWeaponId',       false)
-test('Buddy: DD equip',   'vars',  'ddogEquipId',         false)
-test('Fulton count',      'vars',  'fultonCount',         false)
-test('Fulton everything', 'gvars', 'ful_isEnableFultonAll',false)
-test('Cutscene soldier',  'vars',  'demoIsUseSoldier',    false)
-test('MB Ocelot',         'gvars', 'mb_isEnableOcelot',   false)
-test('MB buddies',        'gvars', 'mb_isEnableBuddies',  false)
-test('Vehicle god',       'vars',  'veh_isInvincible',    false)
-test('Vehicle ammo',      'vars',  'veh_ammoCount',       false)
-test('Skulls free-roam',  'gvars', 'skl_isEnableSkulls',  false)
-test('No enemy AI',       'gvars', 'ene_isDisableAI',     false)
-test('Unlock weapons fn', 'TppMotherBaseManagement','UnlockAllWeaponBlueprint', true)
-test('Unlock items fn',   'TppMotherBaseManagement','UnlockAllItemBlueprint', true)
-test('Unlock missions fn','TppMission','UnlockAllMission', true)
-test('Unlock sideops fn', 'TppQuest','UnlockAllQuest',    true)
-test('Force quest fn',    'TppQuest','ForceStartQuest',   true)
-test('Cassette fn',       'TppUiCommand','PlayCassette',  true)
-test('Skip cutscene fn',  'TppDemo','Skip',               true)
-test('Night vision fn',   'GrTools','SetBrightness',      true)
-test('Clock scale fn',    'TppClock','SetTimeScale',      true)
-test('Marker getter',     'Tpp','GetMarkerPosition',      true)
-test('Marker getter alt', 'TppMarker2System','GetActiveMarkerPosition', true)
-test('Player warp fn',    'TppPlayer','Warp',             true)
+  test('Noise scale',       'vars',  'ply_noiseLevelRate', false)
+  test('Noise scale',       'vars',  'playerNoiseRate',    false)
+  test('Silent weapons',    'vars',  'ply_isNoWeaponNoise',false)
+  test("Dont sub Hero",     'gvars', 'heroSubtractDisable',false)
+  test("Dont add Demon",    'gvars', 'ogreAddDisable',     false)
+  test('Enemy sight',       'gvars', 'soldierSightDistRate',false)
+  test('Enemy sight fn',    'TppSoldier2','SetSightParam',  true)
+  test('Enemy hearing',     'gvars', 'soldierHearingRate',  false)
+  test('Enemy hearing fn',  'TppSoldier2','SetHearingParam', true)
+  test('Enemy prep fn',     'TppRevenge','SetOspreyCombatGimmickCount', true)
+  test('Enemy prep fn alt', 'TppRevenge','SetCombatGimmick', true)
+  test('Disable radio',     'gvars', 'ene_disableRadioCall',false)
+  test('No alert prop',     'gvars', 'ene_noAlertPropagation',false)
+  test('Disable game over', 'mvars', 'mis_isDisableGameOver',false)
+  test('No marking',        'gvars', 'mis_noMarking',       false)
+  test('Subsistence',       'mvars', 'mis_isSubsistence',   false)
+  test('Enemy phase fn',    'TppMission','SetPhase',         true)
+  test('Discovery GO fn',   'TppMission','RegistDiscoveryGameOver', true)
+  test('Buddy Quiet wpn',   'vars',  'quietWeaponId',       false)
+  test('Buddy DD equip',    'vars',  'ddogEquipId',         false)
+  test('Fulton count',      'vars',  'fultonCount',         false)
+  test('Fulton everything', 'gvars', 'ful_isEnableFultonAll',false)
+  test('Cutscene soldier',  'vars',  'demoIsUseSoldier',    false)
+  test('MB Ocelot',         'gvars', 'mb_isEnableOcelot',   false)
+  test('MB buddies',        'gvars', 'mb_isEnableBuddies',  false)
+  test('Vehicle god',       'vars',  'veh_isInvincible',    false)
+  test('Vehicle ammo',      'vars',  'veh_ammoCount',       false)
+  test('Skulls free-roam',  'gvars', 'skl_isEnableSkulls',  false)
+  test('No enemy AI',       'gvars', 'ene_isDisableAI',     false)
+  test('Unlock weapons fn', 'TppMotherBaseManagement','UnlockAllWeaponBlueprint', true)
+  test('Unlock items fn',   'TppMotherBaseManagement','UnlockAllItemBlueprint', true)
+  test('Unlock missions fn','TppMission','UnlockAllMission', true)
+  test('Unlock sideops fn', 'TppQuest','UnlockAllQuest',    true)
+  test('Force quest fn',    'TppQuest','ForceStartQuest',   true)
+  test('Cassette fn',       'TppUiCommand','PlayCassette',  true)
+  test('Skip cutscene fn',  'TppDemo','Skip',               true)
+  test('Night vision fn',   'GrTools','SetBrightness',      true)
+  test('Clock scale fn',    'TppClock','SetTimeScale',      true)
+  test('Marker getter',     'Tpp','GetMarkerPosition',      true)
+  test('Marker getter alt', 'TppMarker2System','GetActiveMarkerPosition', true)
+  test('Player warp fn',    'TppPlayer','Warp',             true)
 
--- Phase 2: namespace types (safe — just reads _G and calls type())
-add('')
-add('=== NAMESPACE TYPES ===')
-for _,n in ipairs({'vars','gvars','mvars','TppSoldier2','TppRevenge','TppMission',
-  'TppQuest','TppDemo','GrTools','TppClock','TppPlayer','TppUiCommand',
-  'TppMotherBaseManagement','TppMarker2System','Tpp','Player','PlayerInfo',
-  'GameObject','HighSpeedCamera','TppHelicopter','TppWeather',
-  'TppReinforceBlock','TppCommandPost2','TppEnemyManager'}) do
-  local ok3, tp = pcall(function() local v = _G[n] return v and type(v) or 'nil' end)
-  add(string.format('  %-30s %s', n, ok3 and tp or ('ERROR: '..tostring(tp))))
-end
+  add('')
+  add('=== NAMESPACE TYPES ===')
+  local nsList = {'vars','gvars','mvars','TppSoldier2','TppRevenge','TppMission',
+    'TppQuest','TppDemo','GrTools','TppClock','TppPlayer','TppUiCommand',
+    'TppMotherBaseManagement','TppMarker2System','Tpp','Player','PlayerInfo',
+    'GameObject','HighSpeedCamera','TppHelicopter','TppWeather',
+    'TppReinforceBlock','TppCommandPost2','TppEnemyManager'}
+  for i = 1, #nsList do
+    local n = nsList[i]
+    local ok3, tp = pcall(function() local v = _G[n] return v and type(v) or 'nil' end)
+    add('  ' .. pad(n, 30) .. ' ' .. (ok3 and tp or ('ERROR: ' .. tostring(tp))))
+  end
 
--- Phase 3: try to iterate vars/gvars/mvars for real keys. Each namespace
--- is wrapped in its own pcall because these might be C++ userdata where
--- pairs() is unsupported — that's fine, we just report the error.
-add('')
-add('=== REAL KEYS (attempting pairs() on each namespace) ===')
-local keywords = {'noise','hero','ogre','sight','hear','radio','alert','fulton',
-  'mark','subsist','skull','disable','gameover','reflex','invinc','ammo','quiet',
-  'ddog','dhorse','dwalker','ocelot','puppy','buddy','phase','reinforce','weapon',
-  'suppress','stealth','speed','damage','recruit','staff','player'}
-for _,ns_name in ipairs({'vars','gvars','mvars'}) do
-  local ok4, msg = pcall(function()
-    local t = _G[ns_name]
-    if t == nil then return '(nil)' end
-    local tp = type(t)
-    if tp ~= 'table' then return '(type=' .. tp .. ', pairs not supported)' end
-    local found = {}
-    for k,v in pairs(t) do
-      if type(k) == 'string' then
-        local lk = string.lower(k)
-        for _,n in ipairs(keywords) do
-          if string.find(lk, n, 1, true) then
-            found[#found+1] = k .. '=' .. tostring(v)
-            break
+  add('')
+  add('=== REAL KEYS (attempting pairs on each namespace) ===')
+  local keywords = {'noise','hero','ogre','sight','hear','radio','alert','fulton',
+    'mark','subsist','skull','disable','gameover','reflex','invinc','ammo','quiet',
+    'ddog','dhorse','dwalker','ocelot','puppy','buddy','phase','reinforce','weapon',
+    'suppress','stealth','speed','damage','recruit','staff','player'}
+  local nsKeys = {'vars','gvars','mvars'}
+  for i = 1, #nsKeys do
+    local ns_name = nsKeys[i]
+    local ok4, msg = pcall(function()
+      local t = _G[ns_name]
+      if t == nil then return '(nil)' end
+      local tp = type(t)
+      if tp ~= 'table' then return '(type=' .. tp .. ', pairs not supported)' end
+      local found = {}
+      for k,v in pairs(t) do
+        if type(k) == 'string' then
+          local lk = string.lower(k)
+          for j = 1, #keywords do
+            if string.find(lk, keywords[j], 1, true) then
+              found[#found+1] = k .. '=' .. tostring(v)
+              break
+            end
           end
         end
       end
-    end
-    if #found == 0 then return '(no matching string keys)' end
-    table.sort(found)
-    return '\n  ' .. table.concat(found, '\n  ')
-  end)
-  add(ns_name .. ': ' .. (ok4 and msg or ('ERROR: ' .. tostring(msg))))
-end
+      if #found == 0 then return '(no matching string keys)' end
+      table.sort(found)
+      return '\n  ' .. table.concat(found, '\n  ')
+    end)
+    add(ns_name .. ': ' .. (ok4 and msg or ('ERROR: ' .. tostring(msg))))
+  end
+end)
 
-add('')
+if not ok then add('FATAL ERROR: ' .. tostring(err)) end
 add('=== probe complete ===')
 IH_PROBE_RESULT = table.concat(out, '\n')
 )LUA";
