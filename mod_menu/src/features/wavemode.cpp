@@ -59,38 +59,31 @@ function IHWave._spawnOne(x, y, z, hostile, diff)
   end)
 end
 
--- Trigger the game's own reinforcement on any command posts present.
+-- Trigger the game's own reinforcement. VERIFIED constraint (from IH's
+-- TppReinforceBlock.lua): this only works where the current area/mission has a
+-- reinforce block authored for it (mvars.reinforce_hasReinforceBlock) and a
+-- real command-post id (mvars.reinforce_cpId). It spawns a helicopter drop of
+-- soldiers. In plain free-roam terrain with no reinforce block, nothing
+-- spawns -- the engine has no arbitrary "spawn here" primitive.
 function IHWave._requestReinforce()
   pcall(function()
-    if TppReinforceBlock and TppReinforceBlock.StartReinforce then
-      -- StartReinforce keys off the active mission's reinforce CP table.
-      for cpId = 0, 7 do
-        pcall(function() TppReinforceBlock.StartReinforce(cpId) end)
-      end
+    if not (mvars and mvars.reinforce_hasReinforceBlock and TppReinforceBlock) then return end
+    local cpId = mvars.reinforce_cpId
+    if TppReinforceBlock.IsLoaded and not TppReinforceBlock.IsLoaded()
+       and TppReinforceBlock.LoadReinforceBlock and TppReinforceBlock.REINFORCE_TYPE then
+      pcall(function()
+        TppReinforceBlock.LoadReinforceBlock(TppReinforceBlock.REINFORCE_TYPE.HELI, cpId)
+      end)
     end
-  end)
-  pcall(function()
-    if GameObject and GameObject.SendCommand then
-      GameObject.SendCommand({ type = "TppCommandPost2" },
-                             { id = "SetReinforceEnable", isEnable = true })
-      GameObject.SendCommand({ type = "TppCommandPost2" },
-                             { id = "RequestReinforce" })
+    if TppReinforceBlock.StartReinforce then
+      TppReinforceBlock.StartReinforce(cpId)
     end
   end)
 end
 
--- Escalate the area so existing CPs scramble soldiers toward the player.
+-- Re-trigger reinforcement (the only verified runtime spawn path).
 function IHWave._escalate()
-  pcall(function()
-    if GameObject and GameObject.SendCommand then
-      GameObject.SendCommand({ type = "TppCommandPost2" },
-                             { id = "SetPhase", phase = "ALERT" })
-    end
-  end)
-  pcall(function()
-    if mvars then mvars.mis_isInfiniteReinforce = true end
-    if gvars then gvars.ene_forceReinforce = true end
-  end)
+  IHWave._requestReinforce()
 end
 
 function IHWave.SpawnWave(n, x, y, z, radius, diff, hostile)
@@ -132,10 +125,6 @@ function IHWave.Clear()
   end
   IHWave.units   = {}
   IHWave.hostile = false
-  pcall(function()
-    if mvars then mvars.mis_isInfiniteReinforce = false end
-    if gvars then gvars.ene_forceReinforce = false end
-  end)
 end
 
 -- Returns 1 if the player is currently detected/under alert, else 0.

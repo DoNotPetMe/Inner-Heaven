@@ -15,21 +15,50 @@ to do about it.
 ## What does not work, and why
 
 Every game-affecting feature resolves its target address by scanning
-`mgsvtpp.exe` for a hard-coded **byte-signature (AOB)**. Those signatures in
-this repo were written by hand and **were never validated against a real game
-binary**. The in-menu **Debug → Pattern Scan Report** confirms it on a live
-game:
+`mgsvtpp.exe` for a **byte-signature (AOB)**. There are two layers:
 
-- **Lua bridge: ~1/5 scans resolve.** `lua_pcall` / `luaL_loadstring` /
-  `lua_State` are not found, so the bridge never connects. Roughly 60 features
-  (god mode, resources, weather, time, appearance, enemy, mission, buddy,
-  Mother Base, progression, the Wave Survival hooks, etc.) run through this
-  bridge and therefore do nothing.
-- **Memory patches: ~5/11 "FOUND", but unreliable.** Several patterns are
-  short and generic (e.g. Rapid Fire keys off `0F 2F`, a `comiss` that occurs
-  in thousands of places). "FOUND" only means *some* bytes matched
-  *somewhere* — almost always the wrong instruction, so NOP-ing it has no
-  visible effect.
+### Lua bridge — REWORKED, ported from IHHook
+
+The original bridge used hand-guessed signatures and read **1/5** scans (dead).
+It has since been rewritten using the verified, maintained signatures from
+[IHHook](https://github.com/TinManTex/IHHook):
+
+- The game has **no `luaL_loadstring`** — the old bridge scanned for a function
+  that doesn't exist. It now compiles via **`luaL_loadbuffer`**.
+- Uses IHHook's version-independent AOB patterns for `lua_pcall`,
+  `luaL_loadbuffer`, `lua_settop`, `lua_tolstring`.
+- Captures `lua_State` live from the `lua_pcall` detour (IHHook's approach),
+  not a guessed global.
+- Runs all queued Lua on the **game thread** (drained inside the pcall hook),
+  not the render thread.
+
+This *should* connect on current builds — verify in **Debug → Pattern Scan
+Report** (expect `LUA BRIDGE: CONNECTED`). When it's green, the ~60 Lua
+features (god mode via `Player.ChangeLifeMaxValue`, GMP, weather, time,
+appearance, etc.) become live.
+
+### Memory patches — still unverified guesses
+
+The direct byte-patch features (the `player.cpp` set) are separate from the Lua
+bridge and **still use guessed patterns**. The Scan Report shows ~5/11 "FOUND",
+but several patterns are short/generic (e.g. Rapid Fire keys off `0F 2F`, a
+`comiss` occurring in thousands of places), so "FOUND" usually means the
+*wrong* instruction and NOP-ing it does nothing. These need real CE patterns
+per build — or just use the Lua equivalents now that the bridge works (e.g. Lua
+god mode instead of the HP-write patch).
+
+### Wave Survival — engine-constrained
+
+Confirmed from IH's source: **MGSV has no runtime "spawn a soldier at XYZ"
+primitive** — not in the game, not in IH, not exposed by IHHook. Enemy presence
+is authored per-region data (routes / command posts / ScriptBlocks). The only
+runtime spawn path is **reinforcements** (`TppReinforceBlock`), which require
+the current area/mission to *already* have a reinforce block
+(`mvars.reinforce_hasReinforceBlock`) and a real command post — and they arrive
+by helicopter. So Wave Survival can only spawn where the game already supports
+reinforcements (outposts / bases / reinforcement-enabled missions); it cannot
+conjure enemies in empty terrain. The C++ wave logic, HUD, scoring and
+live enemy-counting all work; the spawn step is the engine-limited seam.
 
 The code *logic* is sound — patch apply/restore, the game-thread Lua queue,
 the menu — it is simply pointed at **wrong addresses**. No field-name or
