@@ -5,26 +5,35 @@
 #include <MinHook.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <windows.h>
 #include <deque>
 #include <string>
 
 namespace Features::GameLua {
 
+// ── Lua C API ───────────────────────────────────────────────────────────────
+// Signatures, patterns and the overall approach are ported from IHHook
+// (github.com/TinManTex/IHHook, by TinManTex) which maintains these for current
+// MGSV:TPP builds. Two things this fixes vs. the old hand-rolled bridge:
+//   1. The game does NOT export luaL_loadstring (IHHook marks it "USING_CODE").
+//      Compilation goes through luaL_loadbuffer instead.
+//   2. lua_State is captured from the lua_pcall detour (IHHook: usingDetour),
+//      not by guessing a global pointer.
 struct lua_State;
 using lua_pcall_t       = int(__fastcall*)(lua_State* L, int nargs, int nresults, int errfunc);
-using luaL_loadstring_t = int(__fastcall*)(lua_State* L, const char* s);
+using luaL_loadbuffer_t = int(__fastcall*)(lua_State* L, const char* buff, size_t sz, const char* name);
 using lua_settop_t      = void(__fastcall*)(lua_State* L, int idx);
 using lua_tolstring_t   = const char*(__fastcall*)(lua_State* L, int idx, size_t* len);
 
-static luaL_loadstring_t s_loadstring = nullptr;
+static luaL_loadbuffer_t s_loadbuffer = nullptr;
 static lua_settop_t      s_settop     = nullptr;
 static lua_tolstring_t   s_tolstring  = nullptr;
 static lua_pcall_t       o_pcall      = nullptr;
 static lua_State*        s_L          = nullptr;
 
 static int s_ScanFound = 0;
-static int s_ScanTotal = 5;
+static int s_ScanTotal = 4;  // pcall, loadbuffer, settop, tolstring
 
 // ── Game-thread command queue ───────────────────────────────────────────────
 // CRITICAL: MGSV runs its Lua VM on the game thread. We must NOT call into
@@ -51,8 +60,10 @@ static void Enqueue(const char* code) {
 // settop(-2) (== lua_pop 1). No absolute stack index needed, so this is safe
 // to run while nested inside the game's own pcall (its args stay intact).
 static void RunChunkRaw(lua_State* L, const char* code) {
-    if (!L || !s_loadstring || !o_pcall) return;
-    if (s_loadstring(L, code) != 0) {        // compile error -> error string on top
+    if (!L || !s_loadbuffer || !o_pcall) return;
+    // luaL_loadbuffer(L, buff, size, chunkname). Pushes the compiled chunk on
+    // success, or an error string on failure.
+    if (s_loadbuffer(L, code, strlen(code), "IH") != 0) {  // compile error
         if (s_settop) s_settop(L, -2);       // pop it
         return;
     }
@@ -93,55 +104,46 @@ void Init() {
 
     if (!s_queueInit) { InitializeCriticalSection(&s_queueLock); s_queueInit = true; }
 
-    const char* pcallPats[] = {
-        "56 48 83 EC 30 44 89 C6 4C 8B 49",
-        "56 48 83 EC ?? 44 89 C6 48 8B",
-        "48 89 5C 24 ?? 56 48 83 EC 30 44 89 C6",
-        nullptr
-    };
-    for (int i = 0; pcallPats[i]; ++i) {
-        uintptr_t addr = Pattern::Scan(pcallPats[i], base, size);
-        if (addr) {
-            MH_CreateHook(reinterpret_cast<void*>(addr), &pcall_hook,
-                          reinterpret_cast<void**>(&o_pcall));
-            MH_EnableHook(reinterpret_cast<void*>(addr));
-            ++s_ScanFound; break;
+    // Verified patterns from IHHook (mgsvtpp_patterns.h / lua_Signatures.h).
+    // These are maintained against current MGSV builds and are version-
+    // independent, unlike hard-coded addresses.
+
+    // lua_pcall — hook it so we (a) capture lua_State and (b) drain our queue
+    // on the game thread.
+    uintptr_t pcall = Pattern::Scan("48 89 5C 24 ? 57 48 83 EC 40 44 89 C7", base, size);
+    if (pcall) {
+        if (MH_CreateHook(reinterpret_cast<void*>(pcall), &pcall_hook,
+                          reinterpret_cast<void**>(&o_pcall)) == MH_OK &&
+            MH_EnableHook(reinterpret_cast<void*>(pcall)) == MH_OK) {
+            ++s_ScanFound;
         }
     }
 
-    const char* loadPats[] = {
-        "48 89 D6 48 89 CF E8 ?? ?? ?? ?? 48 89 F2 44 89 C1",
-        "48 89 5C 24 ?? 48 89 6C 24 ?? 56 48 83 EC 20 48 89 CE 48 89 D5",
-        nullptr
-    };
-    for (int i = 0; loadPats[i]; ++i) {
-        uintptr_t addr = Pattern::Scan(loadPats[i], base, size);
-        if (addr) { s_loadstring = reinterpret_cast<luaL_loadstring_t>(addr); ++s_ScanFound; break; }
-    }
+    // luaL_loadbuffer — the game has no luaL_loadstring; compile via this.
+    uintptr_t loadbuf = Pattern::Scan("48 83 EC 38 48 89 54 24 ? 4C 89 44 24 ?", base, size);
+    if (loadbuf) { s_loadbuffer = reinterpret_cast<luaL_loadbuffer_t>(loadbuf); ++s_ScanFound; }
 
-    uintptr_t settop = Pattern::Scan("85 D2 78 ?? 48 8B 41 ?? 48 8D 04 D0", base, size);
+    // lua_settop — for stack cleanup.
+    uintptr_t settop = Pattern::Scan("85 D2 78 ? 4C 63 ? 48 8B", base, size);
     if (settop) { s_settop = reinterpret_cast<lua_settop_t>(settop); ++s_ScanFound; }
 
-    uintptr_t tolstr = Pattern::Scan("53 48 83 EC 20 89 D3 48 89 CF E8 ?? ?? ?? ?? 83 78 ?? 04", base, size);
+    // lua_tolstring — for reading return values (RunCodeInt).
+    uintptr_t tolstr = Pattern::Scan(
+        "48 89 ? ? ? 48 89 ? ? ? 57 48 83 EC ? 4C 89 ? 89 D6 48 89 ? E8 ? ? ? ? "
+        "49 89 ? 83 78 08 ? 74 ? 48 89 ? 48 89 ? E8 ? ? ? ? 85 C0 75 ? 48 85",
+        base, size);
     if (tolstr) { s_tolstring = reinterpret_cast<lua_tolstring_t>(tolstr); ++s_ScanFound; }
 
-    uintptr_t state = Pattern::Scan(
-        "48 8B 0D ?? ?? ?? ?? 48 85 C9 74 ?? E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? BA 01",
-        base, size);
-    if (state) {
-        int32_t off = Memory::Read<int32_t>(state + 3);
-        lua_State* candidate = Memory::Read<lua_State*>(state + 7 + off);
-        if (candidate) s_L = candidate;
-        ++s_ScanFound;
-    }
+    // lua_State itself is captured live in pcall_hook (IHHook's usingDetour
+    // approach) — far more reliable than guessing a global pointer.
 }
 
-bool IsReady() { return s_L && o_pcall && s_loadstring; }
+bool IsReady() { return s_L && o_pcall && s_loadbuffer; }
 
 // Queue Lua to run on the game thread (see DrainQueue). Safe to call from the
 // render thread / feature ticks.
 void RunCode(const char* luaCode) {
-    if (!s_L || !s_loadstring || !o_pcall) return;
+    if (!s_L || !s_loadbuffer || !o_pcall) return;
     Enqueue(luaCode);
 }
 
@@ -149,8 +151,8 @@ void RunCode(const char* luaCode) {
 // runs on the calling thread; reserve it for read-only probes (e.g. the wave
 // HUD's detection check), not for state mutation.
 int RunCodeInt(const char* luaCode, int fallback) {
-    if (!s_L || !s_loadstring || !o_pcall) return fallback;
-    if (s_loadstring(s_L, luaCode) != 0) { if (s_settop) s_settop(s_L, -2); return fallback; }
+    if (!s_L || !s_loadbuffer || !o_pcall) return fallback;
+    if (s_loadbuffer(s_L, luaCode, strlen(luaCode), "IH") != 0) { if (s_settop) s_settop(s_L, -2); return fallback; }
     if (o_pcall(s_L, 0, 1, 0) != 0)     { if (s_settop) s_settop(s_L, -2); return fallback; }
     int result = fallback;
     if (s_tolstring) { const char* s = s_tolstring(s_L, -1, nullptr); if (s) result = atoi(s); }
