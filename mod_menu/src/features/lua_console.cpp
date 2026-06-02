@@ -36,12 +36,6 @@ void PrintLine(const char* text, int kind) {
 void Open() { Config::Get().luaConsoleOpen = true; }
 
 void Init() {
-    if (Features::GameLua::IsReady())
-        Log("Lua bridge CONNECTED (runs on game thread).", COL_SYS);
-    else
-        Log("Lua bridge NOT connected yet - load into a mission/FOB, then retry. "
-            "See the Pattern Scan Report if it stays red.", COL_SYS);
-
     Log("Code runs on the game thread. To see output in-game, call "
         "TppUiCommand.AnnounceLogView(tostring(x)).", COL_SYS);
     Log("Examples: Player.ChangeLifeMaxValue(50000)  TppWeather.ForceRequestWeather(1,2.0)", COL_SYS);
@@ -89,6 +83,20 @@ void RenderWindow() {
         ImGui::End();
         return;
     }
+
+    // Live bridge status (updates every frame — no stale Init() message)
+    bool ready = Features::GameLua::IsReady();
+    if (ready) {
+        ImGui::TextColored(ImVec4(0.4f,0.9f,0.4f,1.0f), "LUA BRIDGE: CONNECTED");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.6f,0.6f,0.6f,1.0f),
+            "(%d/%d scans)", Features::GameLua::GetScanFound(), Features::GameLua::GetScanTotal());
+    } else {
+        ImGui::TextColored(ImVec4(1.0f,0.4f,0.4f,1.0f), "LUA BRIDGE: NOT CONNECTED");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.7f,0.7f,0.7f,1.0f), "(load into a mission/FOB)");
+    }
+    ImGui::Separator();
 
     // Quick buttons
     if (ImGui::Button("Max HP")) Execute("pcall(function() Player.ResetLifeMaxValue() Player.ChangeLifeMaxValue(50000) end)");
