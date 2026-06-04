@@ -25,19 +25,30 @@ Every Lua call in `game_lua.cpp` Tick() has been cross-referenced against
 | Feature | Lua API | Notes |
 |---------|---------|-------|
 | God mode | `Player.ChangeLifeMaxValue(50000)` | Reasserted every 3s |
-| Infinite ammo / no reload | `Player.ResetAllAmmo()` | Every 500ms |
-| Set GMP | `TppMotherBaseManagement.SetGmp{gmp=N}` | On change |
-| Set Heroism | `TppMotherBaseManagement.SetHeroicPoint(N)` | On change |
-| Set Demon points | `TppMotherBaseManagement.SetOgrePoint(N)` | On change |
-| Hero/Ogre lock | Periodic reassertion of SetHeroicPoint/SetOgrePoint | Every 2.5s |
-| Weather control | `TppWeather.ForceRequestWeather(id, duration)` | On change |
-| Hand equip | `vars.handEquip` | Fixed from wrong `vars.playerHandType` |
-| Super speed | `Player.SetVarPlayerSpeedRate(N)` | On change |
-| Unlimited stamina | `Player.RecoverStamina()` | Every 500ms |
+| Player health scale | `Player.ChangeLifeMaxValue(N)` | On change |
+| Infinite ammo / no reload | `SendCommand(TppPlayer2, ResetAmmo)` | Every 500ms |
+| Infinite suppressor | `SendCommand(TppPlayer2, ResetSuppressor)` | Every 500ms |
+| Super speed | `SendCommand(TppPlayer2, SetStandMoveSpeedLimit)` | On change |
+| Unlimited stamina | `SendCommand(TppPlayer2, ResetStamina)` | Every 500ms |
 | No fall damage | `Player.ChangeLifeMaxValue(0)` (HP reset) | Backup for memory patch |
+| No reflex | `vars.playerDisableActionFlag` | PlayerDisableAction.REFLEXMODE |
+| Game over on discovery | `TppMission.RegistDiscoveryGameOver()` | On toggle |
+| Appearance (6 fields) | `vars.playerType`, `playerPartsType`, `playerCamoType`, `playerFaceEquipId`, `handEquip`, `playerFaceId` | On change each |
+| Slow motion | `HighSpeedCamera.RequestEvent{}` / `RequestToCancel()` | On change |
+| Time of day | `TppClock.SetTime()` / `TppClock.Start()` | On change |
+| Force night / day | `TppClock.SetTime("02:00"/"12:00")` + `TppClock.Stop()` | On toggle |
+| Weather control | `TppWeather.ForceRequestWeather(id, duration)` | On change |
+| Clock time scale | `TppClock.SetTimeScale(N)` | On change |
+| Helicopter invincible | `TppHelicopter.SetInvincible(bool)` | On toggle |
+| Helicopter searchlight | `TppHelicopter.SetSearchLight(bool)` | On change |
+| Helicopter forced stay | `TppHelicopter.SetForcedStay(bool)` | On toggle |
+| Helicopter stealth | `TppHelicopter.SetStealth(bool)` | On toggle |
+| Set GMP | `TppMotherBaseManagement.SetGmp{gmp=N}` | On change / lock |
+| Set Heroism | `TppMotherBaseManagement.SetHeroicPoint{N}` | On change / lock |
+| Set Demon points | `TppMotherBaseManagement.SetOgrePoint{N}` | On change / lock |
+| Hero/Ogre lock | Periodic reassertion of SetHeroicPoint/SetOgrePoint | Every 2.5s |
 | Enemy prep (revenge) | `TppRevenge.SetRevengePoint(type, pts)` | Real REVENGE_TYPE enum |
 | Skip cutscenes | `DemoDaemon.SkipAll()` | Fixed from wrong `TppDemo.Skip` |
-| Clock time scale | `TppClock.SetTimeScale(N)` | On change |
 | Fulton 100% success | `mvars.ply_allways_100percent_fulton` | Verified field |
 | Teleport (save/load) | `vars.playerPosX/Y/Z` + `TppPlayer.Warp{}` | 3 slots |
 
