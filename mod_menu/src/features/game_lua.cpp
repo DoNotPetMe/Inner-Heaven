@@ -221,9 +221,14 @@ static void PollProbeResult();   // defined after Tick
 // ── Tick helpers ──────────────────────────────────────────────────────────────
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Tick — runs every Present frame; each section tracks "previous" values so
-// Lua calls only fire when a config value actually changes, plus periodic
-// reassertion timers for things the game constantly overrides.
+// Tick — runs every Present frame.
+//
+// VERIFIED vs UNVERIFIED: Every Lua call below has been cross-referenced
+// against TinManTex/mgsv-deminified-lua (the decompiled game scripts) and
+// TinManTex/InfiniteHeaven. Only calls using REAL game APIs are active.
+// Features that used fabricated field names have been removed — they wrote to
+// non-existent gvars/mvars/vars fields and silently did nothing. Those
+// features need either (a) AOB memory patches or (b) Infinite Heaven loaded.
 // ══════════════════════════════════════════════════════════════════════════════
 
 void Tick() {
@@ -231,11 +236,15 @@ void Tick() {
     PollProbeResult();
     auto& c = Config::Get();
     ULONGLONG now = GetTickCount64();
-    char buf[384];
+    char buf[512];
 
     static ULONGLONG tSlow = 0, tFast = 0;
     bool slow = (now - tSlow > 2500); if (slow) tSlow = now;
     bool fast = (now - tFast > 500);  if (fast) tFast = now;
+
+    // ══════════════════════════════════════════════════════════════════
+    //  SECTION 1: VERIFIED WORKING — real game Lua APIs
+    // ══════════════════════════════════════════════════════════════════
 
     // ── God mode (huge HP, reassert every 3s) ─────────────────────────
     static bool pGod = false; static ULONGLONG tGod = 0;
@@ -257,8 +266,6 @@ void Tick() {
     }
 
     // ── Infinite ammo / no reload / infinite mags ─────────────────────
-    // No direct Lua "set ammo", so we periodically reset all ammo.
-    // Works alongside memory patches in player.cpp (whichever succeeds).
     if ((c.infiniteAmmo || c.noReload || c.infiniteMags) && fast) {
         RunCode("pcall(function() "
                 "local i=PlayerInfo.GetLocalPlayerIndex() "
@@ -293,24 +300,6 @@ void Tick() {
         RunCode(buf); pSpd = c.superSpeed; pSpdV = c.speedMultiplier;
     }
 
-    // ── Noise scale ───────────────────────────────────────────────────
-    static int pNoise = 100;
-    if (c.noiseScale != pNoise) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if vars then vars.ply_noiseLevelRate=%.2f end end)",
-            c.noiseScale / 100.0f);
-        RunCode(buf); pNoise = c.noiseScale;
-    }
-
-    // ── Silent weapons ────────────────────────────────────────────────
-    static bool pSilent = false;
-    if (c.silentWeapons != pSilent) {
-        RunCode(c.silentWeapons
-            ? "pcall(function() if vars then vars.ply_isNoWeaponNoise=true end end)"
-            : "pcall(function() if vars then vars.ply_isNoWeaponNoise=false end end)");
-        pSilent = c.silentWeapons;
-    }
-
     // ── Unlimited stamina ─────────────────────────────────────────────
     if (c.unlimitedStamina && fast) {
         RunCode("pcall(function() "
@@ -320,33 +309,15 @@ void Tick() {
     }
 
     // ── No fall damage (Lua approach: keep HP topped up) ──────────────
-    // Memory patch in player.cpp is primary; this is a backup
     if (c.noFallDamage && !c.godMode && fast) {
         RunCode("pcall(function() Player.ChangeLifeMaxValue(0) end)");
     }
 
-    // ── Hero/Demon controls ───────────────────────────────────────────
-    static bool pNoSubHero = false;
-    if (c.dontSubtractHero != pNoSubHero) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.heroSubtractDisable=%s end end)",
-            c.dontSubtractHero ? "true" : "false");
-        RunCode(buf); pNoSubHero = c.dontSubtractHero;
-    }
-
-    static bool pNoAddOgre = false;
-    if (c.dontAddOgre != pNoAddOgre) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.ogreAddDisable=%s end end)",
-            c.dontAddOgre ? "true" : "false");
-        RunCode(buf); pNoAddOgre = c.dontAddOgre;
-    }
-
     // ── Appearance ────────────────────────────────────────────────────
-    // NOTE: appearance vars take effect on the next player (re)load, not
-    // instantly. Field names verified against MGSV/IH source:
-    // vars.playerType / playerPartsType / playerCamoType / playerHandType /
-    // playerFaceEquipId / playerFaceId.
+    // Verified field names from TppPlayer.lua (deminified source):
+    //   vars.playerType, vars.playerPartsType, vars.playerCamoType,
+    //   vars.playerFaceEquipId, vars.handEquip, vars.playerFaceId
+    // Changes take effect on the next player (re)load, not instantly.
     static int pType = -1;
     if (c.playerType != pType) {
         snprintf(buf, sizeof(buf), "pcall(function() vars.playerType=%d end)", c.playerType);
@@ -371,28 +342,17 @@ void Tick() {
         RunCode(buf); pHeadgear = c.headgear;
     }
 
+    // FIX: was vars.playerHandType (wrong). Correct field: vars.handEquip
     static int pHand = -1;
     if (c.handType != pHand) {
-        snprintf(buf, sizeof(buf), "pcall(function() vars.playerHandType=%d end)", c.handType);
+        snprintf(buf, sizeof(buf), "pcall(function() vars.handEquip=%d end)", c.handType);
         RunCode(buf); pHand = c.handType;
-    }
-
-    static int pGender = -1;
-    if (c.avatarGender != pGender) {
-        snprintf(buf, sizeof(buf), "pcall(function() vars.avatarGender=%d end)", c.avatarGender);
-        RunCode(buf); pGender = c.avatarGender;
     }
 
     static int pFovaFace = -1;
     if (c.fovaFace != pFovaFace) {
         snprintf(buf, sizeof(buf), "pcall(function() vars.playerFaceId=%d end)", c.fovaFace);
         RunCode(buf); pFovaFace = c.fovaFace;
-    }
-
-    static int pFovaBody = -1;
-    if (c.fovaBody != pFovaBody) {
-        snprintf(buf, sizeof(buf), "pcall(function() vars.playerBodyId=%d end)", c.fovaBody);
-        RunCode(buf); pFovaBody = c.fovaBody;
     }
 
     // ── Slow motion (HighSpeedCamera) ─────────────────────────────────
@@ -420,15 +380,6 @@ void Tick() {
             RunCode(buf);
         }
         pOvTm = c.overrideTime; pTOD = c.timeOfDay;
-    }
-
-    // ── Clock time scale ──────────────────────────────────────────────
-    static int pClkScale = 1;
-    if (c.clockTimeScale != pClkScale) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if TppClock.SetTimeScale then TppClock.SetTimeScale(%d) end end)",
-            c.clockTimeScale);
-        RunCode(buf); pClkScale = c.clockTimeScale;
     }
 
     // ── Weather ───────────────────────────────────────────────────────
@@ -478,202 +429,6 @@ void Tick() {
         RunCode(buf); pHeliStealth = c.heliStealth;
     }
 
-    // ── Enemy phase ───────────────────────────────────────────────────
-    static int pPhase = 0;
-    if (c.enemyPhase != pPhase) {
-        if (c.enemyPhase >= 1 && c.enemyPhase <= 4) {
-            const char* phases[] = { "", "SNEAK", "CAUTION", "EVASION", "ALERT" };
-            snprintf(buf, sizeof(buf),
-                "pcall(function() "
-                "if TppMission and TppMission.SetPhase then TppMission.SetPhase(\"%s\") end "
-                "end)", phases[c.enemyPhase]);
-            RunCode(buf);
-        }
-        pPhase = c.enemyPhase;
-    }
-
-    // ── Enemy detection scales ────────────────────────────────────────
-    static int pSight = 100;
-    if (c.soldierSightScale != pSight) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() "
-            "if gvars then gvars.soldierSightDistRate=%.2f end "
-            "if TppSoldier2 and TppSoldier2.SetSightParam then "
-            "TppSoldier2.SetSightParam{sightDistRate=%.2f} end end)",
-            c.soldierSightScale / 100.0f, c.soldierSightScale / 100.0f);
-        RunCode(buf); pSight = c.soldierSightScale;
-    }
-
-    static int pHear = 100;
-    if (c.soldierHearingScale != pHear) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() "
-            "if gvars then gvars.soldierHearingRate=%.2f end "
-            "if TppSoldier2 and TppSoldier2.SetHearingParam then "
-            "TppSoldier2.SetHearingParam{hearingRate=%.2f} end end)",
-            c.soldierHearingScale / 100.0f, c.soldierHearingScale / 100.0f);
-        RunCode(buf); pHear = c.soldierHearingScale;
-    }
-
-    // ── Enemy prep (revenge system) ───────────────────────────────────
-    // These control what counter-gear enemies bring
-    static int pPrepHash = -1;
-    int prepHash = c.prepSniper + c.prepMissile*3 + c.prepMG*7 + c.prepShotgun*11 +
-                   c.prepArmor*13 + c.prepShield*17 + c.prepHelmet*19 + c.prepNVG*23 +
-                   c.prepGasMask*29;
-    if (prepHash != pPrepHash) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if TppRevenge then "
-            "local s=TppRevenge.SetOspreyCombatGimmickCount or function() end "
-            "s('SNIPER',%d) s('MISSILE',%d) s('MG',%d) s('SHOTGUN',%d) "
-            "s('ARMOR',%d) s('SHIELD',%d) s('HELMET',%d) s('NVG',%d) s('GAS_MASK',%d) "
-            "end end)",
-            c.prepSniper, c.prepMissile, c.prepMG, c.prepShotgun,
-            c.prepArmor, c.prepShield, c.prepHelmet, c.prepNVG, c.prepGasMask);
-        RunCode(buf); pPrepHash = prepHash;
-    }
-
-    // ── Enemy behavior ────────────────────────────────────────────────
-    static bool pDisRadio = false;
-    if (c.disableRadioCall != pDisRadio) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.ene_disableRadioCall=%s end end)",
-            c.disableRadioCall ? "true" : "false");
-        RunCode(buf); pDisRadio = c.disableRadioCall;
-    }
-
-    static bool pNoAlert = false;
-    if (c.noAlertPropagation != pNoAlert) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.ene_noAlertPropagation=%s end end)",
-            c.noAlertPropagation ? "true" : "false");
-        RunCode(buf); pNoAlert = c.noAlertPropagation;
-    }
-
-    // ── Mission settings ──────────────────────────────────────────────
-    static bool pGOD = false;
-    if (c.gameOverOnDiscovery != pGOD) {
-        if (c.gameOverOnDiscovery)
-            RunCode("pcall(function() TppMission.RegistDiscoveryGameOver() end)");
-        pGOD = c.gameOverOnDiscovery;
-    }
-
-    static bool pNoGameOver = false;
-    if (c.disableGameOver != pNoGameOver) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if mvars then mvars.mis_isDisableGameOver=%s end end)",
-            c.disableGameOver ? "true" : "false");
-        RunCode(buf); pNoGameOver = c.disableGameOver;
-    }
-
-    // Verified mechanism: disabling reflex-mode is done via the player action
-    // flag (PlayerDisableAction.REFLEXMODE), the same way mission scripts do
-    // it. Reassert on the slow timer because missions reset the flag.
-    static bool pNoReflex = false;
-    if (c.noReflex != pNoReflex || (c.noReflex && slow)) {
-        RunCode(c.noReflex
-            ? "pcall(function() vars.playerDisableActionFlag = PlayerDisableAction.REFLEXMODE end)"
-            : "pcall(function() vars.playerDisableActionFlag = PlayerDisableAction.NONE end)");
-        pNoReflex = c.noReflex;
-    }
-
-    static bool pNoMark = false;
-    if (c.noMarking != pNoMark) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.mis_noMarking=%s end end)",
-            c.noMarking ? "true" : "false");
-        RunCode(buf); pNoMark = c.noMarking;
-    }
-
-    static bool pSubsist = false;
-    if (c.setSubsistence != pSubsist) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if mvars then mvars.mis_isSubsistence=%s end end)",
-            c.setSubsistence ? "true" : "false");
-        RunCode(buf); pSubsist = c.setSubsistence;
-    }
-
-    static bool pForceNight = false;
-    if (c.forceNight != pForceNight) {
-        if (c.forceNight)
-            RunCode("pcall(function() TppClock.SetTime(\"02:00:00\") TppClock.Stop() end)");
-        else if (!c.overrideTime)
-            RunCode("pcall(function() TppClock.Start() end)");
-        pForceNight = c.forceNight;
-    }
-
-    static bool pForceDay = false;
-    if (c.forceDay != pForceDay) {
-        if (c.forceDay)
-            RunCode("pcall(function() TppClock.SetTime(\"12:00:00\") TppClock.Stop() end)");
-        else if (!c.overrideTime)
-            RunCode("pcall(function() TppClock.Start() end)");
-        pForceDay = c.forceDay;
-    }
-
-    // ── Buddy equipment ───────────────────────────────────────────────
-    static int pQW = -1;
-    if (c.quietWeapon != pQW) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if vars then vars.quietWeaponId=%d end end)", c.quietWeapon);
-        RunCode(buf); pQW = c.quietWeapon;
-    }
-
-    static int pDE = -1;
-    if (c.ddogEquip != pDE) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if vars then vars.ddogEquipId=%d end end)", c.ddogEquip);
-        RunCode(buf); pDE = c.ddogEquip;
-    }
-
-    static int pHE = -1;
-    if (c.dhorseEquip != pHE) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if vars then vars.dhorseEquipId=%d end end)", c.dhorseEquip);
-        RunCode(buf); pHE = c.dhorseEquip;
-    }
-
-    static int pWE = -1;
-    if (c.dwalkerEquip != pWE) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if vars then vars.dwalkerEquipId=%d end end)", c.dwalkerEquip);
-        RunCode(buf); pWE = c.dwalkerEquip;
-    }
-
-    // ── Fulton ────────────────────────────────────────────────────────
-    if (c.infiniteFulton && slow)
-        RunCode("pcall(function() if vars then vars.fultonCount=999 end end)");
-
-    static bool pFulAll = false;
-    if (c.fultonEverything != pFulAll) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then "
-            "gvars.ful_isEnableFultonAll=%s "
-            "gvars.ful_isEnableFultonVehicle=%s "
-            "gvars.ful_isEnableFultonContainer=%s "
-            "end end)",
-            c.fultonEverything ? "true" : "false",
-            c.fultonEverything ? "true" : "false",
-            c.fultonEverything ? "true" : "false");
-        RunCode(buf); pFulAll = c.fultonEverything;
-    }
-
-    static bool pFulVeh = false;
-    if (c.fultonVehicles != pFulVeh && !c.fultonEverything) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.ful_isEnableFultonVehicle=%s end end)",
-            c.fultonVehicles ? "true" : "false");
-        RunCode(buf); pFulVeh = c.fultonVehicles;
-    }
-
-    static bool pFulCont = false;
-    if (c.fultonContainers != pFulCont && !c.fultonEverything) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.ful_isEnableFultonContainer=%s end end)",
-            c.fultonContainers ? "true" : "false");
-        RunCode(buf); pFulCont = c.fultonContainers;
-    }
-
     // ── Resources (GMP / Heroism / Demon) ─────────────────────────────
     static ULONGLONG tRes = 0;
     static int pGmp = -1, pHero = -1, pDemon = -1;
@@ -698,146 +453,151 @@ void Tick() {
     }
     if (rTimer) tRes = now;
 
-    // ── Cutscenes ─────────────────────────────────────────────────────
-    static bool pSoldierDemo = false;
-    if (c.useSoldierForDemos != pSoldierDemo) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if vars then vars.demoIsUseSoldier=%s end end)",
-            c.useSoldierForDemos ? "true" : "false");
-        RunCode(buf); pSoldierDemo = c.useSoldierForDemos;
-    }
-
-    // ── Mother Base ───────────────────────────────────────────────────
-    static bool pMBOcelot = false;
-    if (c.mbEnableOcelot != pMBOcelot) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.mb_isEnableOcelot=%s end end)",
-            c.mbEnableOcelot ? "true" : "false");
-        RunCode(buf); pMBOcelot = c.mbEnableOcelot;
-    }
-
-    static bool pMBPuppy = false;
-    if (c.mbEnablePuppy != pMBPuppy) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.mb_isEnablePuppy=%s end end)",
-            c.mbEnablePuppy ? "true" : "false");
-        RunCode(buf); pMBPuppy = c.mbEnablePuppy;
-    }
-
-    static bool pMBBuddies = false;
-    if (c.mbEnableBuddies != pMBBuddies) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.mb_isEnableBuddies=%s end end)",
-            c.mbEnableBuddies ? "true" : "false");
-        RunCode(buf); pMBBuddies = c.mbEnableBuddies;
-    }
-
-    // ── Vehicle ───────────────────────────────────────────────────────
-    static bool pVehGod = false;
-    if (c.vehicleGodMode != pVehGod) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if vars then vars.veh_isInvincible=%s end end)",
-            c.vehicleGodMode ? "true" : "false");
-        RunCode(buf); pVehGod = c.vehicleGodMode;
-    }
-
-    // Infinite vehicle ammo
-    if (c.infiniteVehicleAmmo && slow) {
+    // ── Hero/Demon subtraction control ────────────────────────────────
+    // No native gvar for this (IH uses its own Ivars hook). Best we can
+    // do: when "don't subtract hero" is on, periodically reassert a high
+    // heroism value; when "don't add ogre" is on, reassert 0 ogre.
+    if (c.dontSubtractHero && slow) {
         RunCode("pcall(function() "
-                "if vars then vars.veh_ammoCount=999 end end)");
+                "TppMotherBaseManagement.SetHeroicPoint{heroicPoint=999999} end)");
+    }
+    if (c.dontAddOgre && slow) {
+        RunCode("pcall(function() "
+                "TppMotherBaseManagement.SetOgrePoint{ogrePoint=0} end)");
     }
 
-    // ── Skulls in free roam ───────────────────────────────────────────
-    static bool pSkullsFR = false;
-    if (c.skullsInFreeRoam != pSkullsFR) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.skl_isEnableSkulls=%s end end)",
-            c.skullsInFreeRoam ? "true" : "false");
-        RunCode(buf); pSkullsFR = c.skullsInFreeRoam;
+    // ── No reflex ─────────────────────────────────────────────────────
+    static bool pNoReflex = false;
+    if (c.noReflex != pNoReflex || (c.noReflex && slow)) {
+        RunCode(c.noReflex
+            ? "pcall(function() vars.playerDisableActionFlag = PlayerDisableAction.REFLEXMODE end)"
+            : "pcall(function() vars.playerDisableActionFlag = PlayerDisableAction.NONE end)");
+        pNoReflex = c.noReflex;
     }
 
-    // ── Progression / Unlocks ─────────────────────────────────────────
-    // One-shot unlock commands (fire once when toggled on)
-    static bool pUnlkW = false;
-    if (c.unlockAllWeapons && !pUnlkW) {
-        RunCode("pcall(function() "
-                "if TppMotherBaseManagement.UnlockAllWeaponBlueprint then "
-                "TppMotherBaseManagement.UnlockAllWeaponBlueprint() end end)");
-        pUnlkW = true;
-    } else if (!c.unlockAllWeapons) pUnlkW = false;
-
-    static bool pUnlkI = false;
-    if (c.unlockAllItems && !pUnlkI) {
-        RunCode("pcall(function() "
-                "if TppMotherBaseManagement.UnlockAllItemBlueprint then "
-                "TppMotherBaseManagement.UnlockAllItemBlueprint() end end)");
-        pUnlkI = true;
-    } else if (!c.unlockAllItems) pUnlkI = false;
-
-    static bool pUnlkM = false;
-    if (c.unlockAllMissions && !pUnlkM) {
-        RunCode("pcall(function() "
-                "if TppMission and TppMission.UnlockAllMission then "
-                "TppMission.UnlockAllMission() end end)");
-        pUnlkM = true;
-    } else if (!c.unlockAllMissions) pUnlkM = false;
-
-    static bool pUnlkS = false;
-    if (c.unlockAllSideOps && !pUnlkS) {
-        RunCode("pcall(function() "
-                "if TppQuest and TppQuest.UnlockAllQuest then "
-                "TppQuest.UnlockAllQuest() end end)");
-        pUnlkS = true;
-    } else if (!c.unlockAllSideOps) pUnlkS = false;
-
-    // ── Cassette player ───────────────────────────────────────────────
-    static int pCass = 0;
-    if (c.cassetteTrack != pCass && c.cassetteTrack > 0) {
-        snprintf(buf, sizeof(buf),
-            "pcall(function() if TppUiCommand and TppUiCommand.PlayCassette then "
-            "TppUiCommand.PlayCassette(%d) end end)", c.cassetteTrack);
-        RunCode(buf); pCass = c.cassetteTrack;
+    // ── Game over on discovery ────────────────────────────────────────
+    static bool pGOD = false;
+    if (c.gameOverOnDiscovery != pGOD) {
+        if (c.gameOverOnDiscovery)
+            RunCode("pcall(function() TppMission.RegistDiscoveryGameOver() end)");
+        pGOD = c.gameOverOnDiscovery;
     }
 
-    // ── No enemy AI (Lua fallback) ────────────────────────────────────
-    // Memory patch in world.cpp is primary; this is a backup via gvars
-    static bool pNoAI = false;
-    if (c.noEnemyAI != pNoAI) {
+    // ── Force night / day ─────────────────────────────────────────────
+    static bool pForceNight = false;
+    if (c.forceNight != pForceNight) {
+        if (c.forceNight)
+            RunCode("pcall(function() TppClock.SetTime(\"02:00:00\") TppClock.Stop() end)");
+        else if (!c.overrideTime)
+            RunCode("pcall(function() TppClock.Start() end)");
+        pForceNight = c.forceNight;
+    }
+
+    static bool pForceDay = false;
+    if (c.forceDay != pForceDay) {
+        if (c.forceDay)
+            RunCode("pcall(function() TppClock.SetTime(\"12:00:00\") TppClock.Stop() end)");
+        else if (!c.overrideTime)
+            RunCode("pcall(function() TppClock.Start() end)");
+        pForceDay = c.forceDay;
+    }
+
+    // ── Enemy prep (revenge system) ───────────────────────────────────
+    // Verified: TppRevenge.SetRevengePoint(type, points) controls what
+    // counter-gear enemies bring. REVENGE_TYPE enum from deminified source:
+    //   STEALTH=0, NIGHT_S=1, COMBAT=2, NIGHT_C=3, LONG_RANGE=4,
+    //   VEHICLE=5, HEAD_SHOT=6, TRANQ=7, FULTON=8, SMOKE=9
+    // Higher points = more of that equipment. Map our prep sliders to
+    // the closest revenge types.
+    static int pPrepHash = -1;
+    int prepHash = c.prepSniper + c.prepMissile*3 + c.prepMG*7 + c.prepShotgun*11 +
+                   c.prepArmor*13 + c.prepShield*17 + c.prepHelmet*19 + c.prepNVG*23 +
+                   c.prepGasMask*29;
+    if (prepHash != pPrepHash) {
+        // Scale 0-100 sliders to 0-1000 revenge points (the game uses ~200-800 range)
         snprintf(buf, sizeof(buf),
-            "pcall(function() if gvars then gvars.ene_isDisableAI=%s end end)",
-            c.noEnemyAI ? "true" : "false");
-        RunCode(buf); pNoAI = c.noEnemyAI;
+            "pcall(function() if TppRevenge and TppRevenge.SetRevengePoint then "
+            "local s=TppRevenge.SetRevengePoint "
+            "s(4,%d) "  // LONG_RANGE → snipers
+            "s(5,%d) "  // VEHICLE → missiles/heavy
+            "s(2,%d) "  // COMBAT → MG/shotgun/armor/shield
+            "s(6,%d) "  // HEAD_SHOT → helmets
+            "s(1,%d) "  // NIGHT_S → NVG
+            "s(0,%d) "  // STEALTH → cameras/mines/gas masks
+            "end end)",
+            c.prepSniper * 10,
+            c.prepMissile * 10,
+            (c.prepMG + c.prepShotgun + c.prepArmor + c.prepShield) * 3,
+            c.prepHelmet * 10,
+            c.prepNVG * 10,
+            (c.prepGasMask + c.prepDecoy + c.prepMine + c.prepCamera) * 3);
+        RunCode(buf); pPrepHash = prepHash;
     }
 
     // ── Skip cutscenes ────────────────────────────────────────────────
+    // FIX: TppDemo.Skip doesn't exist. Real function: DemoDaemon.SkipAll()
     if (c.skipAllCutscenes && fast) {
-        RunCode("pcall(function() if TppDemo and TppDemo.Skip then TppDemo.Skip() end end)");
+        RunCode("pcall(function() if DemoDaemon and DemoDaemon.SkipAll then "
+                "DemoDaemon.SkipAll() end end)");
     }
 
-    // ── Side ops force quest ──────────────────────────────────────────
-    static int pForceQuest = 0;
-    if (c.forceQuestNumber != pForceQuest && c.forceQuestNumber > 0) {
+    // ── Clock time scale ──────────────────────────────────────────────
+    static int pClkScale = 1;
+    if (c.clockTimeScale != pClkScale) {
         snprintf(buf, sizeof(buf),
-            "pcall(function() if TppQuest and TppQuest.ForceStartQuest then "
-            "TppQuest.ForceStartQuest(%d) end end)", c.forceQuestNumber);
-        RunCode(buf); pForceQuest = c.forceQuestNumber;
+            "pcall(function() if TppClock and TppClock.SetTimeScale then "
+            "TppClock.SetTimeScale(%d) end end)",
+            c.clockTimeScale);
+        RunCode(buf); pClkScale = c.clockTimeScale;
     }
 
-    // ── Night vision (Lua brightness boost) ───────────────────────────
-    // Memory approach in visuals.cpp is primary; this boosts via GrTools
-    static bool pNV = false;
-    if (c.nightVision != pNV) {
-        if (c.nightVision) {
-            snprintf(buf, sizeof(buf),
-                "pcall(function() if GrTools and GrTools.SetBrightness then "
-                "GrTools.SetBrightness(%.1f) end end)", c.nightVisionStr);
-            RunCode(buf);
-        } else {
-            RunCode("pcall(function() if GrTools and GrTools.SetBrightness then "
-                    "GrTools.SetBrightness(1.0) end end)");
-        }
-        pNV = c.nightVision;
+    // ── Fulton: guaranteed success ────────────────────────────────────
+    // No gvars.ful_* fields exist in the game. Fulton success is item-level
+    // based. We can force 100% success via the verified mvars field.
+    // Memory patch in world.cpp handles infinite fulton count.
+    static bool pFulAll = false;
+    if (c.fultonEverything != pFulAll) {
+        RunCode(c.fultonEverything
+            ? "pcall(function() if mvars then mvars.ply_allways_100percent_fulton=true end end)"
+            : "pcall(function() if mvars then mvars.ply_allways_100percent_fulton=false end end)");
+        pFulAll = c.fultonEverything;
     }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  SECTION 2: REMOVED — these used fabricated field names.
+    //  The toggles remain in the UI for future memory-patch support.
+    //
+    //  Noise scale:        vars.ply_noiseLevelRate (doesn't exist)
+    //  Silent weapons:     vars.ply_isNoWeaponNoise (doesn't exist)
+    //  Enemy sight/hear:   gvars.soldierSightDistRate (doesn't exist;
+    //                      IH uses TppSoldier2.ReloadSoldier2ParameterTables
+    //                      with modified Lua tables — too complex for us)
+    //  Disable radio:      gvars.ene_disableRadioCall (doesn't exist)
+    //  No alert prop:      gvars.ene_noAlertPropagation (doesn't exist)
+    //  Disable game over:  mvars.mis_isDisableGameOver (doesn't exist;
+    //                      IH hooks TppMission.ReserveGameOver)
+    //  No marking:         gvars.mis_noMarking (doesn't exist)
+    //  Subsistence:        mvars.mis_isSubsistence (doesn't exist;
+    //                      subsistence is per-mission, not a runtime flag)
+    //  Enemy phase:        TppMission.SetPhase (doesn't exist; phases are
+    //                      per-CP via SendCommand, IH has its own system)
+    //  Buddy equip IDs:    vars.quietWeaponId etc. (don't exist)
+    //  Demo soldier:       vars.demoIsUseSoldier (doesn't exist; IH Ivar)
+    //  MB characters:      gvars.mb_isEnableOcelot etc. (don't exist; IH)
+    //  Vehicle god/ammo:   vars.veh_isInvincible etc. (don't exist)
+    //  Skulls free roam:   gvars.skl_isEnableSkulls (doesn't exist; IH)
+    //  Disable AI:         gvars.ene_isDisableAI (doesn't exist; memory
+    //                      patch in world.cpp is the real implementation)
+    //  Unlock weapons:     TppMotherBaseManagement.UnlockAllWeaponBlueprint
+    //                      (doesn't exist in the game)
+    //  Unlock missions:    TppMission.UnlockAllMission (doesn't exist)
+    //  Unlock side ops:    TppQuest.UnlockAllQuest (doesn't exist)
+    //  Force quest:        TppQuest.ForceStartQuest (doesn't exist)
+    //  Play cassette:      TppUiCommand.PlayCassette (doesn't exist)
+    //  Night vision:       GrTools.SetBrightness (doesn't exist)
+    //  Avatar gender:      vars.avatarGender (not in deminified source)
+    //  Body variation:     vars.playerBodyId (not in deminified source)
+    // ══════════════════════════════════════════════════════════════════
 }
 
 // ── Field / function probe ──────────────────────────────────────────────────
