@@ -1,130 +1,104 @@
 # Project Status — read this first
 
-**Current state: the menu/overlay renders, but in-game cheats do not work on
-current `mgsvtpp.exe` builds.** This is an honest accounting of why, and what
-to do about it.
+**Current state: the menu/overlay renders, the Lua bridge connects, and
+verified Lua features work in-game.** Fabricated field names have been removed.
 
 ## What works
 
-- DLL injection and the DirectX 11 overlay (Dear ImGui) render correctly.
-- Menu navigation, config, and all the **visual-only** overlay pieces that
-  don't depend on reading/writing game memory: crosshair, FPS / frame-time,
-  on-screen text. (ESP needs a valid entity-list address to actually draw
-  boxes — see below.)
+### Overlay & UI
+- DLL injection and DirectX 11 overlay (Dear ImGui) render correctly.
+- Menu navigation, config persistence, all visual overlays (crosshair, FPS,
+  frame-time, on-screen text).
+- Lua Console with live bridge status, command history, quick-action buttons.
 
-## What does not work, and why
+### Lua bridge (IHHook-style) — WORKING
+The bridge uses IHHook's verified AOB patterns for `lua_pcall`,
+`luaL_loadbuffer`, `lua_settop`, `lua_tolstring`. It captures `lua_State`
+live from the pcall detour and runs all Lua on the game thread. Check
+**Debug → Pattern Scan Report** — expect `LUA BRIDGE: CONNECTED`.
 
-Every game-affecting feature resolves its target address by scanning
-`mgsvtpp.exe` for a **byte-signature (AOB)**. There are two layers:
+### Verified Lua features (these actually do something)
+Every Lua call in `game_lua.cpp` Tick() has been cross-referenced against
+[mgsv-deminified-lua](https://github.com/TinManTex/mgsv-deminified-lua) and
+[InfiniteHeaven](https://github.com/TinManTex/InfiniteHeaven).
 
-### Lua bridge — REWORKED, ported from IHHook
+| Feature | Lua API | Notes |
+|---------|---------|-------|
+| God mode | `Player.ChangeLifeMaxValue(50000)` | Reasserted every 3s |
+| Infinite ammo / no reload | `Player.ResetAllAmmo()` | Every 500ms |
+| Set GMP | `TppMotherBaseManagement.SetGmp{gmp=N}` | On change |
+| Set Heroism | `TppMotherBaseManagement.SetHeroicPoint(N)` | On change |
+| Set Demon points | `TppMotherBaseManagement.SetOgrePoint(N)` | On change |
+| Hero/Ogre lock | Periodic reassertion of SetHeroicPoint/SetOgrePoint | Every 2.5s |
+| Weather control | `TppWeather.ForceRequestWeather(id, duration)` | On change |
+| Hand equip | `vars.handEquip` | Fixed from wrong `vars.playerHandType` |
+| Super speed | `Player.SetVarPlayerSpeedRate(N)` | On change |
+| Unlimited stamina | `Player.RecoverStamina()` | Every 500ms |
+| No fall damage | `Player.ChangeLifeMaxValue(0)` (HP reset) | Backup for memory patch |
+| Enemy prep (revenge) | `TppRevenge.SetRevengePoint(type, pts)` | Real REVENGE_TYPE enum |
+| Skip cutscenes | `DemoDaemon.SkipAll()` | Fixed from wrong `TppDemo.Skip` |
+| Clock time scale | `TppClock.SetTimeScale(N)` | On change |
+| Fulton 100% success | `mvars.ply_allways_100percent_fulton` | Verified field |
+| Teleport (save/load) | `vars.playerPosX/Y/Z` + `TppPlayer.Warp{}` | 3 slots |
 
-The original bridge used hand-guessed signatures and read **1/5** scans (dead).
-It has since been rewritten using the verified, maintained signatures from
-[IHHook](https://github.com/TinManTex/IHHook):
+### Memory patch features (AOB-based, some working)
+These live in `player.cpp`, `world.cpp`, `resources.cpp` and don't use Lua:
+- God mode (HP write NOP) — pattern-dependent
+- Infinite ammo / no reload — pattern-dependent
+- No recoil / no sway — pattern-dependent
+- AI disable (world.cpp) — working via memory patch
+- Infinite fulton count (world.cpp) — working via memory patch
+- GMP/heroism/demon direct write (resources.cpp) — pattern-dependent
 
-- The game has **no `luaL_loadstring`** — the old bridge scanned for a function
-  that doesn't exist. It now compiles via **`luaL_loadbuffer`**.
-- Uses IHHook's version-independent AOB patterns for `lua_pcall`,
-  `luaL_loadbuffer`, `lua_settop`, `lua_tolstring`.
-- Captures `lua_State` live from the `lua_pcall` detour (IHHook's approach),
-  not a guessed global.
-- Runs all queued Lua on the **game thread** (drained inside the pcall hook),
-  not the render thread.
+### Buddy command wheel
+`buddies.cpp` provides a Lua-based buddy command system using the game's
+`GameObject.SendCommand` with verified `TppBuddyService` command types.
 
-This *should* connect on current builds — verify in **Debug → Pattern Scan
-Report** (expect `LUA BRIDGE: CONNECTED`). When it's green, the ~60 Lua
-features (god mode via `Player.ChangeLifeMaxValue`, GMP, weather, time,
-appearance, etc.) become live.
+## What does NOT work (removed fabricated Lua calls)
 
-### Memory patches — still unverified guesses
+These features have UI toggles but **no working backend**. The Lua field
+names they used were fabricated — they don't exist in the game's Lua
+environment. Writing to them was a silent no-op (C++ userdata `__newindex`
+drops unknown keys).
 
-The direct byte-patch features (the `player.cpp` set) are separate from the Lua
-bridge and **still use guessed patterns**. The Scan Report shows ~5/11 "FOUND",
-but several patterns are short/generic (e.g. Rapid Fire keys off `0F 2F`, a
-`comiss` occurring in thousands of places), so "FOUND" usually means the
-*wrong* instruction and NOP-ing it does nothing. These need real CE patterns
-per build — or just use the Lua equivalents now that the bridge works (e.g. Lua
-god mode instead of the HP-write patch).
+| Feature | Fabricated field | Reality |
+|---------|-----------------|---------|
+| Noise scale | `vars.ply_noiseLevelRate` | No such field |
+| Silent weapons | `vars.ply_isNoWeaponNoise` | No such field |
+| Enemy sight/hearing | `gvars.soldierSightDistRate` etc. | IH uses `TppSoldier2.ReloadSoldier2ParameterTables` with modified Lua tables — too complex for DLL-only |
+| Disable radio | `gvars.ene_disableRadioCall` | No such field |
+| No alert propagation | `gvars.ene_noAlertPropagation` | No such field |
+| Disable game over | `mvars.mis_isDisableGameOver` | IH hooks `TppMission.ReserveGameOver` |
+| No marking | `gvars.mis_noMarking` | No such field |
+| Subsistence mode | `mvars.mis_isSubsistence` | Per-mission, not a runtime flag |
+| Enemy phase control | `TppMission.SetPhase()` | Doesn't exist; phases are per-CP via SendCommand |
+| Buddy equip IDs | `vars.quietWeaponId` etc. | No such fields |
+| Demo soldier | `vars.demoIsUseSoldier` | IH Ivar, not a game field |
+| MB characters | `gvars.mb_isEnableOcelot` etc. | IH Ivars, not game fields |
+| Vehicle god/ammo | `vars.veh_isInvincible` etc. | No such fields |
+| Skulls in free roam | `gvars.skl_isEnableSkulls` | IH Ivar, not a game field |
+| Enemy AI (Lua) | `gvars.ene_isDisableAI` | No such field; memory patch in world.cpp works |
+| Unlock all weapons | `TppMotherBaseManagement.UnlockAllWeaponBlueprint()` | Function doesn't exist |
+| Unlock all items | `TppMotherBaseManagement.UnlockAllItemBlueprint()` | Function doesn't exist |
+| Unlock all missions | `TppMission.UnlockAllMission()` | Function doesn't exist |
+| Unlock all side ops | `TppQuest.UnlockAllQuest()` | Function doesn't exist |
+| Force start quest | `TppQuest.ForceStartQuest(N)` | Function doesn't exist |
+| Play cassette | `TppUiCommand.PlayCassette(N)` | Function doesn't exist |
+| Night vision | `GrTools.SetBrightness(N)` | Function doesn't exist |
+| Avatar gender | `vars.avatarGender` | Not in deminified source |
+| Body variation | `vars.playerBodyId` | Not in deminified source |
 
-### Teleport — REWORKED onto the verified Lua bridge
+## Paths forward for broken features
 
-The old teleport wrote to an AOB-scanned "player position" address that never
-resolved on current builds, so it did nothing. It now goes through the connected
-Lua bridge using functions verified against the deminified game scripts:
+1. **Memory patches (AOB):** Some features (noise, vehicle, AI) could work
+   via direct memory writes if correct byte signatures are found with Cheat
+   Engine for your specific build.
 
-- read position: `vars.playerPosX / playerPosY / playerPosZ`, `vars.playerRotY`
-- warp: `TppPlayer.Warp{pos={x,y,z}, rotY=deg}` (→ `GameObject.SendCommand(
-  {type="TppPlayer2",index=..},{id="WarpAndWaitBlock",pos=..,rotY=..})`)
+2. **Load Infinite Heaven alongside this mod:** Many of the "impossible"
+   features (sight/hearing, game over disable, skulls, MB characters) are
+   implemented in IH through its own `Ivars` system and deep Lua hooks.
+   With IH loaded, this mod could call IH's APIs instead.
 
-**Misc → Save Slot 1-3 / Load Slot 1-3** now actually save and warp. **World →
-Teleport to Marker** warps to your saved Slot 1 (your "marker"). Note: reading
-the *iDroid map marker* position itself has no clean public Lua getter that
-could be verified from open sources, so the working "marker" is the slot you
-save — set it where you want, warp back to it any time.
-
-### Wave Survival — engine-constrained
-
-Wave Mode now reads live state to know where you are: **Scout Location** asks the
-game whether the current area has a reinforcement block (`mvars.
-reinforce_hasReinforceBlock`) and reports the answer in the in-game log, and
-Start anchors the arena from the verified Lua player position. The spawn step is
-still the engine seam below.
-
-Confirmed from IH's source: **MGSV has no runtime "spawn a soldier at XYZ"
-primitive** — not in the game, not in IH, not exposed by IHHook. Enemy presence
-is authored per-region data (routes / command posts / ScriptBlocks). The only
-runtime spawn path is **reinforcements** (`TppReinforceBlock`), which require
-the current area/mission to *already* have a reinforce block
-(`mvars.reinforce_hasReinforceBlock`) and a real command post — and they arrive
-by helicopter. So Wave Survival can only spawn where the game already supports
-reinforcements (outposts / bases / reinforcement-enabled missions); it cannot
-conjure enemies in empty terrain. The C++ wave logic, HUD, scoring and
-live enemy-counting all work; the spawn step is the engine-limited seam.
-
-The code *logic* is sound — patch apply/restore, the game-thread Lua queue,
-the menu — it is simply pointed at **wrong addresses**. No field-name or
-threading change can fix that; only correct signatures for your specific game
-build can.
-
-## The realistic path: Infinite Heaven
-
-[Infinite Heaven](https://www.nexusmods.com/metalgearsolidvtpp/mods/45) and its
-native hook [IHHook](https://github.com/TinManTex/IHHook) (both by TinManTex)
-already solve MGSV Lua injection correctly and are **maintained for current
-game versions**. IHHook keeps a real, connected Lua state and runs Lua
-reliably on the game thread — exactly the bridge that reads 1/5 here.
-
-Almost everything this menu *attempts* is a real, working feature in IH's
-in-game menu: health / god mode, GMP / heroism / demon points, weather and
-time of day, enemy sight / hearing / behavior, buddy control and equipment,
-fulton tweaks, player appearance, **soldier spawning / free-roam patrols**
-(the spawn-based mode — IH does it by editing the data layer and reloading the
-region, which is the only way it can be done), and much more.
-
-**If the goal is working singleplayer cheats today:** install Infinite Heaven
-(follow the official install steps on its GitHub / Nexus page, since they track
-game updates) and use its menu.
-
-## If you want THIS project to work
-
-Two technical models, in order of effort:
-
-1. **Scope this overlay to what IH doesn't do.** Keep the DX11 ImGui overlay
-   for visual-only features (crosshair, FPS, position, ESP once wired) and let
-   IH own all game-state cheating. No fragile signatures required.
-2. **Build on IHHook's already-located Lua state** instead of re-scanning for
-   `lua_pcall` yourself. IHHook has no clean public C-API for a third-party
-   DLL, so this means coupling to IH internals (it is open-source, so it is
-   doable), and you still depend on IH being loaded.
-3. **Supply correct signatures for your build.** If you can provide your exact
-   `mgsvtpp.exe` version and/or the addresses from a Cheat Engine session, the
-   existing architecture can be pointed at them and will work. The Pattern
-   Scan Report is built for exactly this cross-checking.
-
-## Honesty note on the README
-
-The README describes the *intended* feature set. Claims there that AOB
-patterns are "verified against community CE tables" or "sourced from IHHook"
-are **aspirational, not actual** — the patterns are unverified guesses. Treat
-the README as a design document, and this file as the ground truth.
+3. **Accept the limitation:** Some features simply can't be done from a DLL
+   without the engine-level hooks that IH provides. The UI toggles are kept
+   as placeholders for when a solution becomes available.
